@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Secrets
+.env
+.env.*
+
+# Keep an example configuration if we add one later
+!.env.example
+
+# Frontend
+node_modules/
+frontend/dist/
+
