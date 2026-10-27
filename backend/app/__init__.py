@@ -3,6 +3,7 @@ from flask import Flask, jsonify
 from config import Config
 from app.extensions import db, migrate
 from app.routes.stations import stations_bp
+from app.routes.trains import trains_bp
 from app import models
 
 
@@ -14,7 +15,8 @@ def create_app():
     migrate.init_app(app, db)
 
     app.register_blueprint(stations_bp)
-    
+    app.register_blueprint(trains_bp)
+
     @app.get("/api/health")
     def health_check():
         return jsonify({
