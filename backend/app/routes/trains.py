@@ -1,8 +1,10 @@
+from datetime import date
+
 from flask import Blueprint, jsonify, request
 from sqlalchemy.orm import aliased
 
 from app.extensions import db
-from app.models import Train, TrainRoute, Station
+from app.models import Train, TrainRoute, TrainSchedule, Station
 
 trains_bp = Blueprint("trains", __name__, url_prefix="/api/trains")
 
@@ -11,15 +13,24 @@ trains_bp = Blueprint("trains", __name__, url_prefix="/api/trains")
 def search_trains():
     source_code = request.args.get("source", "").strip().upper()
     destination_code = request.args.get("destination", "").strip().upper()
+    journey_date_str = request.args.get("date", "").strip()
 
-    if not source_code or not destination_code:
+    if not source_code or not destination_code or not journey_date_str:
         return jsonify({
-            "error": "Both source and destination are required."
+            "error": "Source, destination, and date are required.",
+            "example": "/api/trains/search?source=NGP&destination=BSL&date=2026-10-28",
         }), 400
 
     if source_code == destination_code:
         return jsonify({
             "error": "Source and destination must be different."
+        }), 400
+
+    try:
+        journey_date = date.fromisoformat(journey_date_str)
+    except ValueError:
+        return jsonify({
+            "error": "Invalid date. Use YYYY-MM-DD format."
         }), 400
 
     source_route = aliased(TrainRoute)
@@ -30,10 +41,15 @@ def search_trains():
     statement = (
         db.select(
             Train,
+            TrainSchedule,
             source_station,
             destination_station,
             source_route,
             destination_route,
+        )
+        .join(
+            TrainSchedule,
+            TrainSchedule.train_id == Train.id,
         )
         .join(source_route, source_route.train_id == Train.id)
         .join(
@@ -47,6 +63,8 @@ def search_trains():
         )
         .where(
             Train.is_active.is_(True),
+            TrainSchedule.journey_date == journey_date,
+            TrainSchedule.status == "SCHEDULED",
             source_station.code == source_code,
             destination_station.code == destination_code,
             source_station.is_active.is_(True),
@@ -60,6 +78,8 @@ def search_trains():
 
     trains = [
         {
+            "schedule_id": schedule.id,
+            "journey_date": schedule.journey_date.isoformat(),
             "train_number": train.train_number,
             "name": train.name,
             "running_days": train.running_days,
@@ -85,6 +105,7 @@ def search_trains():
         }
         for (
             train,
+            schedule,
             src_station,
             dest_station,
             src_route,
@@ -93,6 +114,7 @@ def search_trains():
     ]
 
     return jsonify({
+        "journey_date": journey_date.isoformat(),
         "count": len(trains),
         "trains": trains,
     }), 200
