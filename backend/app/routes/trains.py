@@ -2,9 +2,10 @@ from datetime import date
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy.orm import aliased
+from sqlalchemy import func
 
 from app.extensions import db
-from app.models import Train, TrainRoute, TrainSchedule, Station
+from app.models import Train, TrainRoute, TrainSchedule, Station,Coach, Seat
 
 trains_bp = Blueprint("trains", __name__, url_prefix="/api/trains")
 
@@ -117,4 +118,56 @@ def search_trains():
         "journey_date": journey_date.isoformat(),
         "count": len(trains),
         "trains": trains,
+    }), 200
+
+
+@trains_bp.get("/<int:train_id>/inventory")
+def get_train_inventory(train_id):
+    train = db.session.get(Train, train_id)
+
+    if not train or not train.is_active:
+        return jsonify({"error": "Train not found"}), 404
+
+    coach_class = request.args.get("class", "").upper()
+
+    allowed_classes = {"SL", "3A", "2A", "1A"}
+    if coach_class not in allowed_classes:
+        return jsonify({
+            "error": "Provide a valid class: SL, 3A, 2A, or 1A"
+        }), 400
+
+    coaches = Coach.query.filter_by(
+        train_id=train.id,
+        coach_class=coach_class,
+    ).order_by(Coach.coach_number).all()
+
+    inventory = []
+    total_seats = 0
+
+    for coach in coaches:
+        seats = Seat.query.filter_by(
+            coach_id=coach.id
+        ).order_by(Seat.seat_number).all()
+
+        total_seats += len(seats)
+
+        inventory.append({
+            "coach_number": coach.coach_number,
+            "coach_class": coach.coach_class,
+            "seats": [
+                {
+                    "seat_number": seat.seat_number,
+                    "berth_type": seat.berth_type,
+                }
+                for seat in seats
+            ],
+        })
+
+    return jsonify({
+        "train_number": train.train_number,
+        "train_name": train.name,
+        "class": coach_class,
+        "total_seats": total_seats,
+        "coaches": inventory,
+        "availability_status": "NOT_TRACKED_YET",
     }), 200
