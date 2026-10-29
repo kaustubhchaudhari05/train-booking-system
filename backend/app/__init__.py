@@ -4,7 +4,9 @@ from config import Config
 from app.extensions import db, migrate
 from app.routes.stations import stations_bp
 from app.routes.trains import trains_bp
+from app.routes.booking import booking_bp
 from app import models
+from app.routes.availability import availability_bp
 
 
 def create_app():
@@ -16,7 +18,8 @@ def create_app():
 
     app.register_blueprint(stations_bp)
     app.register_blueprint(trains_bp)
-
+    app.register_blueprint(availability_bp)
+    app.register_blueprint(booking_bp)
     @app.get("/api/health")
     def health_check():
         return jsonify({
