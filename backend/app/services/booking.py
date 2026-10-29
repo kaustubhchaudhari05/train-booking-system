@@ -261,3 +261,93 @@ def create_booking(
     except Exception:
         db.session.rollback()
         raise
+
+
+
+def confirm_booking(booking_id):
+    try:
+        # Lock the booking so concurrent confirmation attempts
+        # cannot process it at the same time.
+        booking = (
+            db.session.query(Booking)
+            .filter_by(id=booking_id)
+            .with_for_update()
+            .first()
+        )
+
+        if booking is None:
+            raise BookingError("Booking not found.", 404)
+
+        if booking.status != "PENDING":
+            raise BookingError(
+                f"Booking cannot be confirmed from status {booking.status}.",
+                409,
+            )
+
+        now = datetime.now(timezone.utc)
+
+        # Do not confirm an expired booking.
+        if booking.expires_at is not None:
+            expiry = booking.expires_at
+            if expiry.tzinfo is None:
+                expiry = expiry.replace(tzinfo=timezone.utc)
+
+            if expiry <= now:
+                raise BookingError(
+                    "Booking hold has expired. Please create a new booking.",
+                    409,
+                )
+
+        # Lock all reservations for this booking.
+        reservations = (
+            db.session.query(SeatReservation)
+            .filter_by(booking_id=booking.id)
+            .with_for_update()
+            .all()
+        )
+
+        if not reservations or len(reservations) != len(booking.passengers):
+            raise BookingError(
+                "Booking does not have a reservation for every passenger.",
+                409,
+            )
+
+        # Validate every reservation before changing any status.
+        for reservation in reservations:
+            if reservation.status != "HELD":
+                raise BookingError(
+                    "All seat reservations must be HELD to confirm this booking.",
+                    409,
+                )
+
+            if reservation.expires_at is not None:
+                expiry = reservation.expires_at
+                if expiry.tzinfo is None:
+                    expiry = expiry.replace(tzinfo=timezone.utc)
+
+                if expiry <= now:
+                    raise BookingError(
+                        "A seat reservation has expired. Please create a new booking.",
+                        409,
+                    )
+
+        # Update the booking and reservations in one transaction.
+        booking.status = "CONFIRMED"
+
+        for reservation in reservations:
+            reservation.status = "CONFIRMED"
+            reservation.expires_at = None
+
+        db.session.commit()
+
+        return {
+            "booking_id": booking.id,
+            "booking_reference": booking.booking_reference,
+            "status": booking.status,
+            "confirmed_seats": len(reservations),
+            "total_amount": str(booking.total_amount),
+        }
+
+    except Exception:
+        db.session.rollback()
+        raise

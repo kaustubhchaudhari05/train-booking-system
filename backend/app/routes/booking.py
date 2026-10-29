@@ -2,7 +2,11 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.services.booking import BookingError, create_booking
+from app.services.booking import (
+    BookingError,
+    create_booking,
+    confirm_booking,
+)
 
 booking_bp = Blueprint(
     "booking",
@@ -76,4 +80,33 @@ def create_booking_route():
         return jsonify({
             "error": "INTERNAL_SERVER_ERROR",
             "message": "An unexpected error occurred."
+        }), 500
+
+
+@booking_bp.post("/<int:booking_id>/confirm")
+def confirm_booking_route(booking_id):
+    try:
+        result = confirm_booking(booking_id)
+        return jsonify(result), 200
+
+    except BookingError as exc:
+        return jsonify({
+            "error": "BOOKING_ERROR",
+            "message": str(exc),
+        }), exc.status_code
+
+    except SQLAlchemyError:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "DATABASE_ERROR",
+            "message": "The booking could not be confirmed.",
+        }), 500
+
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred.",
         }), 500
