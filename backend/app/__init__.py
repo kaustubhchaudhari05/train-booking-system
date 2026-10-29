@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from flask_cors import CORS
 
 from config import Config
 from app.extensions import db, migrate
@@ -11,6 +12,10 @@ from app.routes.availability import availability_bp
 
 def create_app():
     app = Flask(__name__)
+    CORS(app, resources={r"/api/*": {"origins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]}})    
     app.config.from_object(Config)
 
     db.init_app(app)

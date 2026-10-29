@@ -1,0 +1,282 @@
+#root {
+  min-height: 100vh;
+}
+
+.page {
+  min-height: 100vh;
+  background: #f5f7fb;
+  color: #17233c;
+}
+
+.site-header {
+  height: 72px;
+  padding: 0 7%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border-bottom: 1px solid #e7eaf1;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.brand-icon {
+  font-size: 28px;
+}
+
+.header-label {
+  color: #64708a;
+  font-size: 14px;
+}
+
+.hero {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 90px 0 110px;
+  text-align: center;
+}
+
+.eyebrow {
+  color: #285bd4;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.hero h1 {
+  margin: 14px 0;
+  font-size: clamp(34px, 5vw, 54px);
+  letter-spacing: -1.8px;
+}
+
+.hero-description {
+  margin-bottom: 40px;
+  color: #68748a;
+  font-size: 17px;
+}
+
+.search-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.9fr;
+  gap: 18px;
+  padding: 28px;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #e4e8f0;
+  border-radius: 18px;
+  box-shadow: 0 18px 50px rgb(25 45 80 / 7%);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-field label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.form-field select,
+.form-field input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  padding: 0 12px;
+  border: 1px solid #dce2ed;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #17233c;
+  font: inherit;
+}
+
+.form-field select:focus,
+.form-field input:focus {
+  outline: 2px solid #9bb8ff;
+  border-color: #285bd4;
+}
+
+.search-button {
+  grid-column: 1 / -1;
+  height: 50px;
+  margin-top: 5px;
+  border: none;
+  border-radius: 9px;
+  background: #285bd4;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.search-button:hover:not(:disabled) {
+  background: #1948b6;
+}
+
+.search-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-message {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #64708a;
+  font-size: 14px;
+}
+
+.error-message {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #c62828;
+  font-size: 14px;
+}
+
+.site-footer {
+  padding: 22px;
+  text-align: center;
+  color: #7a8498;
+  font-size: 13px;
+}
+
+@media (max-width: 700px) {
+  .site-header {
+    padding: 0 20px;
+  }
+
+  .header-label {
+    font-size: 12px;
+  }
+
+  .hero {
+    padding-top: 55px;
+  }
+
+  .search-card {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+
+  .search-button {
+    grid-column: auto;
+  }
+
+  .status-message,
+  .error-message {
+    grid-column: auto;
+  }
+}
+
+
+.results-section {
+  margin-top: 38px;
+  text-align: left;
+}
+
+.results-section h2 {
+  margin-bottom: 6px;
+  font-size: 25px;
+}
+
+.results-count {
+  margin-bottom: 20px;
+  color: #68748a;
+  font-size: 14px;
+}
+
+.train-list {
+  display: grid;
+  gap: 16px;
+}
+
+.train-card {
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #e4e8f0;
+  border-radius: 14px;
+  box-shadow: 0 8px 25px rgb(25 45 80 / 4%);
+}
+
+.train-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.train-heading h3 {
+  margin: 0 0 6px;
+  font-size: 19px;
+}
+
+.train-number,
+.distance {
+  color: #68748a;
+  font-size: 13px;
+}
+
+.distance {
+  white-space: nowrap;
+}
+
+.journey-times {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #edf0f5;
+}
+
+.journey-times strong {
+  font-size: 22px;
+}
+
+.journey-times p {
+  margin: 6px 0 3px;
+  font-size: 14px;
+}
+
+.journey-times span {
+  color: #68748a;
+  font-size: 12px;
+}
+
+.destination-time {
+  text-align: right;
+}
+
+.journey-arrow {
+  color: #285bd4;
+}
+
+@media (max-width: 500px) {
+  .train-card {
+    padding: 18px;
+  }
+
+  .journey-times {
+    gap: 8px;
+  }
+
+  .journey-times strong {
+    font-size: 18px;
+  }
+
+  .journey-times p {
+    font-size: 12px;
+  }
+
+  .journey-arrow {
+    font-size: 12px;
+  }
+}
