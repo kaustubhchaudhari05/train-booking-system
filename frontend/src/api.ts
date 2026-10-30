@@ -73,7 +73,55 @@ export async function searchTrains(params: {
     }
 
     return data as TrainSearchResponse;
-}   
+}
 
+
+export type CoachClass = "SL" | "3A" | "2A" | "1A";
+
+export const COACH_CLASSES: CoachClass[] = ["SL", "3A", "2A", "1A"];
+
+export interface AvailableSeat {
+    id: number;
+    coach_id: number;
+    coach_number: string;
+    seat_number: string;
+    berth_type: string;
+}
+
+interface SeatAvailabilityResponse {
+    train_schedule_id: number;
+    coach_class: CoachClass;
+    source_stop_order: number;
+    destination_stop_order: number;
+    available_seats: AvailableSeat[];
+    count: number;
+}
+
+export async function getSeatAvailability(params: {
+    scheduleId: number;
+    coachClass: CoachClass;
+    sourceStopOrder: number;
+    destinationStopOrder: number;
+}): Promise<SeatAvailabilityResponse> {
+    const query = new URLSearchParams({
+        coach_class: params.coachClass,
+        source_stop_order: String(params.sourceStopOrder),
+        destination_stop_order: String(params.destinationStopOrder),
+    });
+
+    const response = await fetch(
+        `${API_BASE_URL}/availability/${params.scheduleId}?${query.toString()}`,
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to load seat availability.",
+        );
+    }
+
+    return data as SeatAvailabilityResponse;
+}
 
 

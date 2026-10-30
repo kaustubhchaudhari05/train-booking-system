@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
 import {
+  COACH_CLASSES,
   getStations,
   searchTrains,
+  type CoachClass,
   type Station,
   type TrainSearchResult,
 } from "./api";
+import SeatAvailability from "./components/SeatAvailability";
 import "./App.css";
+
+interface ClassSelection {
+  scheduleId: number;
+  coachClass: CoachClass;
+}
 
 function App() {
   const [stations, setStations] = useState<Station[]>([]);
@@ -17,6 +25,7 @@ function App() {
   const [trains, setTrains] = useState<TrainSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [selection, setSelection] = useState<ClassSelection | null>(null);
 
   useEffect(() => {
     async function loadStations() {
@@ -55,6 +64,7 @@ function App() {
 
     setError("");
     setTrains([]);
+    setSelection(null);
     setSearching(true);
     setSearched(false);
 
@@ -201,6 +211,47 @@ function App() {
                         <span>{train.destination.code}</span>
                       </div>
                     </div>
+
+                    <div
+                      className="class-picker"
+                      role="group"
+                      aria-label={`Select class for ${train.name}`}
+                    >
+                      {COACH_CLASSES.map((coachClass) => {
+                        const isSelected =
+                          selection?.scheduleId === train.schedule_id &&
+                          selection.coachClass === coachClass;
+
+                        return (
+                          <button
+                            key={coachClass}
+                            type="button"
+                            className="class-button"
+                            aria-pressed={isSelected}
+                            onClick={() =>
+                              setSelection(
+                                isSelected
+                                  ? null
+                                  : {
+                                      scheduleId: train.schedule_id,
+                                      coachClass,
+                                    },
+                              )
+                            }
+                          >
+                            {coachClass}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {selection?.scheduleId === train.schedule_id && (
+                      <SeatAvailability
+                        key={`${train.schedule_id}-${selection.coachClass}`}
+                        train={train}
+                        coachClass={selection.coachClass}
+                      />
+                    )}
                   </article>
                 ))}
               </div>

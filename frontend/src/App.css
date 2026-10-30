@@ -259,6 +259,54 @@
   color: #285bd4;
 }
 
+.class-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #edf0f5;
+}
+
+.class-button {
+  min-width: 64px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid #dce2ed;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #17233c;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.class-button:hover {
+  border-color: #285bd4;
+}
+
+.class-button[aria-pressed="true"] {
+  border-color: #285bd4;
+  background: #285bd4;
+  color: #ffffff;
+}
+
+.train-card > .status-message,
+.train-card > .error-message {
+  margin-top: 16px;
+}
+
+.availability-count {
+  margin: 16px 0 0;
+  color: #68748a;
+  font-size: 14px;
+}
+
+.availability-count strong {
+  color: #1b7a3d;
+  font-size: 18px;
+}
 @media (max-width: 500px) {
   .train-card {
     padding: 18px;
