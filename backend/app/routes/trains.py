@@ -85,16 +85,20 @@ def search_trains():
             "name": train.name,
             "running_days": train.running_days,
             "source": {
+                "station_id": src_station.id,
                 "code": src_station.code,
                 "name": src_station.name,
+                "stop_order": src_route.stop_order,
                 "departure_time": (
                     src_route.departure_time.strftime("%H:%M")
                     if src_route.departure_time else None
                 ),
             },
             "destination": {
+                "station_id": dest_station.id,
                 "code": dest_station.code,
                 "name": dest_station.name,
+                "stop_order": dest_route.stop_order,
                 "arrival_time": (
                     dest_route.arrival_time.strftime("%H:%M")
                     if dest_route.arrival_time else None

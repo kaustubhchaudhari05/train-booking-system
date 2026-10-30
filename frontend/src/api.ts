@@ -31,15 +31,19 @@ export interface TrainSearchResult {
     journey_date: string;
     train_number: string;
     name: string;
-    running_days: string;
+    running_days: string[];
     source: {
+        station_id: number;
         code: string;
         name: string;
+        stop_order: number;
         departure_time: string | null;
     };
     destination: {
+        station_id: number;
         code: string;
         name: string;
+        stop_order: number;
         arrival_time: string | null;
     };
     distance_km: string;
