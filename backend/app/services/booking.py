@@ -92,12 +92,15 @@ def create_booking(
             raise BookingError("Journey distance must be positive.")
 
         # Calculate fare per passenger.
-        passenger_fare = calculate_fare(
-            train_id=schedule.train_id,
-            source_station_id=source_station_id,
-            destination_station_id=destination_station_id,
-            coach_class=coach_class,
-        )
+        try:
+            passenger_fare = calculate_fare(
+                train_id=schedule.train_id,
+                source_station_id=source_station_id,
+                destination_station_id=destination_station_id,
+                coach_class=coach_class,
+            )
+        except ValueError as exc:
+            raise BookingError(str(exc)) from exc
 
         now = datetime.now(timezone.utc)
         hold_expiry = now + timedelta(minutes=10)

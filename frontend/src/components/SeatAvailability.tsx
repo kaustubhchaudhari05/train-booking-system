@@ -61,16 +61,14 @@ function SeatAvailability({ train, coachClass }: SeatAvailabilityProps) {
   if (count === 0) {
     return (
       <p className="status-message">
-        No seats available in {coachClass} for {train.source.code} →{" "}
-        {train.destination.code}.
+        No seats available
       </p>
     );
   }
 
   return (
     <p className="availability-count">
-      <strong>{count}</strong> seat{count === 1 ? "" : "s"} available in{" "}
-      {coachClass}
+      <strong>{count}</strong> seat{count === 1 ? "" : "s"} available
     </p>
   );
 }

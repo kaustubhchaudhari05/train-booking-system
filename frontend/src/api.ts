@@ -125,3 +125,44 @@ export async function getSeatAvailability(params: {
 }
 
 
+export interface FareQuote {
+    train_schedule_id: number;
+    source_station_id: number;
+    destination_station_id: number;
+    coach_class: CoachClass;
+    passengers: number;
+    fare_per_passenger: string;
+    total_fare: string;
+}
+
+export async function getFareQuote(params: {
+    scheduleId: number;
+    sourceStationId: number;
+    destinationStationId: number;
+    coachClass: CoachClass;
+    passengers?: number;
+}): Promise<FareQuote> {
+    const query = new URLSearchParams({
+        train_schedule_id: String(params.scheduleId),
+        source_station_id: String(params.sourceStationId),
+        destination_station_id: String(params.destinationStationId),
+        coach_class: params.coachClass,
+        passengers: String(params.passengers ?? 1),
+    });
+
+    const response = await fetch(
+        `${API_BASE_URL}/fares/quote?${query.toString()}`,
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to load fare.",
+        );
+    }
+
+    return data as FareQuote;
+}
+
+

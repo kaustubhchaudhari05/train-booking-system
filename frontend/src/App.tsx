@@ -7,6 +7,7 @@ import {
   type Station,
   type TrainSearchResult,
 } from "./api";
+import FareSummary from "./components/FareSummary";
 import SeatAvailability from "./components/SeatAvailability";
 import "./App.css";
 
@@ -246,11 +247,18 @@ function App() {
                     </div>
 
                     {selection?.scheduleId === train.schedule_id && (
-                      <SeatAvailability
-                        key={`${train.schedule_id}-${selection.coachClass}`}
-                        train={train}
-                        coachClass={selection.coachClass}
-                      />
+                      <>
+                        <SeatAvailability
+                          key={`seats-${train.schedule_id}-${selection.coachClass}`}
+                          train={train}
+                          coachClass={selection.coachClass}
+                        />
+                        <FareSummary
+                          key={`fare-${train.schedule_id}-${selection.coachClass}`}
+                          train={train}
+                          coachClass={selection.coachClass}
+                        />
+                      </>
                     )}
                   </article>
                 ))}
