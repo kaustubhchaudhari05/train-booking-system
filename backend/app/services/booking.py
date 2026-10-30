@@ -1,8 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import or_
-
 from app.extensions import db
 from app.models.booking import Booking
 from app.models.booking_passenger import BookingPassenger
@@ -10,13 +8,79 @@ from app.models.coach import Coach
 from app.models.seat import Seat
 from app.models.seat_reservation import SeatReservation
 from app.models.train_schedule import TrainSchedule
+from app.services.availability import reserved_seat_ids_query
 from app.services.fare import calculate_fare
+
+BERTH_PREFERENCES = {
+    "NO_PREFERENCE",
+    "LOWER",
+    "MIDDLE",
+    "UPPER",
+    "SIDE_LOWER",
+    "SIDE_UPPER",
+}
 
 
 class BookingError(Exception):
     def __init__(self, message, status_code=400):
         super().__init__(message)
         self.status_code = status_code
+
+
+def _validate_passenger(passenger_data):
+    name = passenger_data.get("passenger_name")
+    age = passenger_data.get("age")
+    gender = passenger_data.get("gender")
+    berth_preference = passenger_data.get(
+        "berth_preference", "NO_PREFERENCE"
+    )
+
+    if not isinstance(name, str) or not name.strip():
+        raise BookingError("Passenger name is required.")
+
+    if (
+        isinstance(age, bool)
+        or not isinstance(age, int)
+        or not 0 <= age <= 120
+    ):
+        raise BookingError("Passenger age must be between 0 and 120.")
+
+    if gender not in {"MALE", "FEMALE", "OTHER"}:
+        raise BookingError("Invalid passenger gender.")
+
+    if berth_preference not in BERTH_PREFERENCES:
+        raise BookingError("Invalid berth preference.")
+
+    return {
+        "passenger_name": name.strip(),
+        "age": age,
+        "gender": gender,
+        "berth_preference": berth_preference,
+    }
+
+
+def _assign_seats(passengers, free_seats):
+    # First give passengers with a berth preference a matching seat,
+    # then fill everyone else from the remaining seats in coach order.
+    remaining = list(free_seats)
+    assigned = [None] * len(passengers)
+
+    for index, passenger in enumerate(passengers):
+        preference = passenger["berth_preference"]
+        if preference == "NO_PREFERENCE":
+            continue
+
+        for seat in remaining:
+            if seat.berth_type == preference:
+                assigned[index] = seat
+                remaining.remove(seat)
+                break
+
+    for index in range(len(passengers)):
+        if assigned[index] is None:
+            assigned[index] = remaining.pop(0)
+
+    return assigned
 
 
 def create_booking(
@@ -52,6 +116,8 @@ def create_booking(
 
     if not all(isinstance(p, dict) for p in passengers):
         raise BookingError("Each passenger must be an object.")
+
+    passengers = [_validate_passenger(p) for p in passengers]
 
     try:
         # Lock and validate the schedule within the transaction.
@@ -105,6 +171,38 @@ def create_booking(
         now = datetime.now(timezone.utc)
         hold_expiry = now + timedelta(minutes=10)
 
+        # The schedule row lock above serializes bookings for this
+        # schedule, so the free seats found here cannot be taken by a
+        # concurrent request before this transaction commits.
+        reserved_seat_ids = reserved_seat_ids_query(
+            train_schedule_id,
+            coach_class,
+            source_stop_order,
+            destination_stop_order,
+            now,
+        )
+
+        free_seats = (
+            db.session.query(Seat)
+            .join(Coach, Seat.coach_id == Coach.id)
+            .filter(
+                Coach.train_id == schedule.train_id,
+                Coach.coach_class == coach_class,
+                ~Seat.id.in_(reserved_seat_ids),
+            )
+            .order_by(Coach.coach_number, Seat.id)
+            .all()
+        )
+
+        if len(free_seats) < len(passengers):
+            raise BookingError(
+                f"Only {len(free_seats)} seat(s) available in "
+                f"{coach_class} for this journey.",
+                409,
+            )
+
+        assigned_seats = _assign_seats(passengers, free_seats)
+
         booking = Booking(
             booking_reference=uuid4().hex[:20].upper(),
             train_schedule_id=train_schedule_id,
@@ -121,113 +219,12 @@ def create_booking(
         db.session.add(booking)
         db.session.flush()
 
-        seen_seat_ids = set()
+        passenger_results = []
 
-        for passenger_data in passengers:
-            name = passenger_data.get("passenger_name")
-            age = passenger_data.get("age")
-            gender = passenger_data.get("gender")
-            seat_id = passenger_data.get("seat_id")
-            berth_preference = passenger_data.get(
-                "berth_preference", "NO_PREFERENCE"
-            )
-
-            if not isinstance(name, str) or not name.strip():
-                raise BookingError("Passenger name is required.")
-
-            if (
-                isinstance(age, bool)
-                or not isinstance(age, int)
-                or not 0 <= age <= 120
-            ):
-                raise BookingError(
-                    "Passenger age must be between 0 and 120."
-                )
-
-            if gender not in {"MALE", "FEMALE", "OTHER"}:
-                raise BookingError("Invalid passenger gender.")
-
-            if berth_preference not in {
-                "NO_PREFERENCE",
-                "LOWER",
-                "MIDDLE",
-                "UPPER",
-                "SIDE_LOWER",
-                "SIDE_UPPER",
-            }:
-                raise BookingError("Invalid berth preference.")
-
-            if (
-                isinstance(seat_id, bool)
-                or not isinstance(seat_id, int)
-                or seat_id <= 0
-            ):
-                raise BookingError("A valid seat_id is required.")
-
-            if seat_id in seen_seat_ids:
-                raise BookingError(
-                    "The same seat cannot be assigned to multiple passengers."
-                )
-
-            seen_seat_ids.add(seat_id)
-
-            # Lock the selected seat and verify train and class.
-            seat = (
-                db.session.query(Seat)
-                .join(Coach, Seat.coach_id == Coach.id)
-                .filter(
-                    Seat.id == seat_id,
-                    Coach.train_id == schedule.train_id,
-                    Coach.coach_class == coach_class,
-                )
-                .with_for_update()
-                .first()
-            )
-
-            if seat is None:
-                raise BookingError(
-                    "Selected seat does not belong to this train "
-                    "and coach class."
-                )
-
-            # Check overlapping active reservations on this schedule.
-            overlapping = (
-                db.session.query(SeatReservation.id)
-                .join(
-                    Booking,
-                    SeatReservation.booking_id == Booking.id,
-                )
-                .filter(
-                    SeatReservation.seat_id == seat_id,
-                    Booking.train_schedule_id == train_schedule_id,
-                    Booking.status.in_(["PENDING", "CONFIRMED"]),
-                    SeatReservation.status.in_(["HELD", "CONFIRMED"]),
-                    or_(
-                        SeatReservation.status != "HELD",
-                        SeatReservation.expires_at.is_(None),
-                        SeatReservation.expires_at > now,
-                    ),
-                    SeatReservation.source_stop_order
-                    < destination_stop_order,
-                    SeatReservation.destination_stop_order
-                    > source_stop_order,
-                )
-                .first()
-            )
-
-            if overlapping:
-                raise BookingError(
-                    f"Seat {seat.seat_number} is already reserved "
-                    "for an overlapping segment.",
-                    409,
-                )
-
+        for passenger_data, seat in zip(passengers, assigned_seats):
             passenger = BookingPassenger(
                 booking_id=booking.id,
-                passenger_name=name.strip(),
-                age=age,
-                gender=gender,
-                berth_preference=berth_preference,
+                **passenger_data,
             )
 
             db.session.add(passenger)
@@ -245,6 +242,16 @@ def create_booking(
 
             db.session.add(reservation)
 
+            passenger_results.append({
+                "passenger_name": passenger.passenger_name,
+                "age": passenger.age,
+                "gender": passenger.gender,
+                "berth_preference": passenger.berth_preference,
+                "coach_number": seat.coach.coach_number,
+                "seat_number": seat.seat_number,
+                "berth_type": seat.berth_type,
+            })
+
         db.session.commit()
 
         return {
@@ -252,7 +259,7 @@ def create_booking(
             "booking_reference": booking.booking_reference,
             "status": booking.status,
             "coach_class": booking.coach_class,
-            "passengers": len(passengers),
+            "passengers": passenger_results,
             "total_amount": str(booking.total_amount),
             "expires_at": (
                 booking.expires_at.isoformat()

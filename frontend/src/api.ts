@@ -166,3 +166,69 @@ export async function getFareQuote(params: {
 }
 
 
+export type Gender = "MALE" | "FEMALE" | "OTHER";
+
+export type BerthPreference =
+    | "NO_PREFERENCE"
+    | "LOWER"
+    | "MIDDLE"
+    | "UPPER"
+    | "SIDE_LOWER"
+    | "SIDE_UPPER";
+
+export const MAX_PASSENGERS = 6;
+
+export interface PassengerInput {
+    passenger_name: string;
+    age: number;
+    gender: Gender;
+    berth_preference: BerthPreference;
+}
+
+export interface BookedPassenger extends PassengerInput {
+    coach_number: string;
+    seat_number: string;
+    berth_type: string;
+}
+
+export interface BookingResult {
+    booking_id: number;
+    booking_reference: string;
+    status: string;
+    coach_class: CoachClass;
+    passengers: BookedPassenger[];
+    total_amount: string;
+    expires_at: string | null;
+}
+
+export async function createBooking(params: {
+    train: TrainSearchResult;
+    coachClass: CoachClass;
+    passengers: PassengerInput[];
+}): Promise<BookingResult> {
+    const response = await fetch(`${API_BASE_URL}/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            train_schedule_id: params.train.schedule_id,
+            source_station_id: params.train.source.station_id,
+            destination_station_id: params.train.destination.station_id,
+            source_stop_order: params.train.source.stop_order,
+            destination_stop_order: params.train.destination.stop_order,
+            coach_class: params.coachClass,
+            passengers: params.passengers,
+        }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to create booking.",
+        );
+    }
+
+    return data as BookingResult;
+}
+
+
