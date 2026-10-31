@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { cancelBooking, getBooking, type BookingDetails } from "../api";
+import { getBooking, type BookingDetails } from "../api";
 import { BERTH_LABELS, formatJourneyDate, formatTime } from "../format";
 
 const STATUS_CLASS: Record<string, string> = {
@@ -15,8 +15,6 @@ function BookingDetailsPage() {
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -44,30 +42,6 @@ function BookingDetailsPage() {
       cancelled = true;
     };
   }, [reference]);
-
-  async function handleCancel() {
-    if (
-      !booking ||
-      !window.confirm(
-        "Cancel this booking for all passengers? This cannot be undone.",
-      )
-    ) {
-      return;
-    }
-
-    setCancelError("");
-    setCancelling(true);
-
-    try {
-      setBooking(await cancelBooking(booking.booking_reference));
-    } catch (err: unknown) {
-      setCancelError(
-        err instanceof Error ? err.message : "Failed to cancel booking.",
-      );
-    } finally {
-      setCancelling(false);
-    }
-  }
 
   return (
     <section className="booking-page">
@@ -148,37 +122,46 @@ function BookingDetailsPage() {
             )}
 
             <ul className="booked-passengers">
-              {booking.passengers.map((passenger, index) => (
-                <li key={index}>
-                  <span>
-                    {passenger.passenger_name} ({passenger.age},{" "}
-                    {passenger.gender.toLowerCase()})
-                  </span>
-                  <strong>
-                    {passenger.seat_number
-                      ? `${passenger.coach_number} / ${passenger.seat_number} ${
-                          BERTH_LABELS[passenger.berth_type ?? ""] ??
-                          passenger.berth_type
-                        }`
-                      : booking.status === "PENDING"
-                        ? "Pending"
-                        : "—"}
-                  </strong>
-                </li>
-              ))}
+              {booking.passengers.map((passenger) => {
+                const passengerCancelled = passenger.status === "CANCELLED";
+
+                return (
+                  <li
+                    key={passenger.id}
+                    className={
+                      passengerCancelled ? "passenger-cancelled" : undefined
+                    }
+                  >
+                    <span>
+                      {passenger.passenger_name} ({passenger.age},{" "}
+                      {passenger.gender.toLowerCase()})
+                    </span>
+                    <strong>
+                      {passengerCancelled
+                        ? "Cancelled"
+                        : passenger.seat_number
+                          ? `${passenger.coach_number} / ${passenger.seat_number} ${
+                              BERTH_LABELS[passenger.berth_type ?? ""] ??
+                              passenger.berth_type
+                            }`
+                          : booking.status === "PENDING"
+                            ? "Pending"
+                            : "—"}
+                    </strong>
+                  </li>
+                );
+              })}
             </ul>
 
-            {cancelError && <p className="error-message">{cancelError}</p>}
-
             {booking.can_cancel && (
-              <button
-                type="button"
-                className="danger-button"
-                onClick={handleCancel}
-                disabled={cancelling}
+              <Link
+                className="link-button danger-link"
+                to={`/cancel?reference=${encodeURIComponent(
+                  booking.booking_reference,
+                )}`}
               >
-                {cancelling ? "Cancelling..." : "Cancel booking"}
-              </button>
+                Cancel a ticket
+              </Link>
             )}
           </section>
         </article>

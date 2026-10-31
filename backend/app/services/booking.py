@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
 from app.extensions import db
@@ -245,6 +246,7 @@ def create_booking(
             # Seat details are only returned once the booking is
             # confirmed (see confirm_booking).
             passenger_results.append({
+                "id": passenger.id,
                 "passenger_name": passenger.passenger_name,
                 "age": passenger.age,
                 "gender": passenger.gender,
@@ -307,15 +309,27 @@ def confirm_booking(booking_id):
                     409,
                 )
 
-        # Lock all reservations for this booking.
+        # Cancelled passengers are left out; only active passengers
+        # and their reservations are confirmed.
+        active_passengers = [
+            passenger for passenger in booking.passengers
+            if passenger.status == "ACTIVE"
+        ]
+
+        # Lock the active passengers' reservations.
         reservations = (
             db.session.query(SeatReservation)
-            .filter_by(booking_id=booking.id)
+            .filter(
+                SeatReservation.booking_id == booking.id,
+                SeatReservation.booking_passenger_id.in_(
+                    [passenger.id for passenger in active_passengers]
+                ),
+            )
             .with_for_update()
             .all()
         )
 
-        if not reservations or len(reservations) != len(booking.passengers):
+        if not reservations or len(reservations) != len(active_passengers):
             raise BookingError(
                 "Booking does not have a reservation for every passenger.",
                 409,
@@ -356,9 +370,10 @@ def confirm_booking(booking_id):
 
         passenger_results = []
 
-        for passenger in booking.passengers:
+        for passenger in active_passengers:
             seat = reservation_by_passenger[passenger.id].seat
             passenger_results.append({
+                "id": passenger.id,
                 "passenger_name": passenger.passenger_name,
                 "age": passenger.age,
                 "gender": passenger.gender,
@@ -390,8 +405,8 @@ def _as_utc(value):
 
 
 def _effective_status(booking, now):
-    # Expired holds are not yet moved to EXPIRED in the database
-    # (Phase 7), so report them as expired here.
+    # Expired holds are only moved to EXPIRED in the database when the
+    # expire-holds command runs, so report them as expired here.
     expires_at = _as_utc(booking.expires_at)
     if (
         booking.status == "PENDING"
@@ -433,13 +448,20 @@ def _serialize_booking(booking, now):
             for reservation in reservations
         }
 
+    booking_cancellable = _cancel_blocker(booking, status) is None
+
     passengers = []
     for passenger in booking.passengers:
         passenger_data = {
+            "id": passenger.id,
             "passenger_name": passenger.passenger_name,
             "age": passenger.age,
             "gender": passenger.gender,
             "berth_preference": passenger.berth_preference,
+            "status": passenger.status,
+            "can_cancel": (
+                booking_cancellable and passenger.status == "ACTIVE"
+            ),
         }
 
         seat = seats_by_passenger.get(passenger.id)
@@ -495,7 +517,7 @@ def _serialize_booking(booking, now):
             ),
         },
         "distance_km": distance_km,
-        "can_cancel": _cancel_blocker(booking, status) is None,
+        "can_cancel": booking_cancellable,
         "passengers": passengers,
     }
 
@@ -553,15 +575,117 @@ def cancel_booking(reference):
             .all()
         )
 
-        # Cancelling the reservations releases the seats for the
-        # booked segment.
-        for reservation in reservations:
-            if reservation.status in {"HELD", "CONFIRMED"}:
-                reservation.status = "CANCELLED"
-                reservation.expires_at = None
+        _cancel_whole_booking(booking, reservations)
 
-        booking.status = "CANCELLED"
-        booking.expires_at = None
+        db.session.commit()
+
+        return _serialize_booking(booking, now)
+
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def _cancel_whole_booking(booking, reservations):
+    # Cancelling the reservations releases the seats for the
+    # booked segment.
+    for reservation in reservations:
+        if reservation.status in {"HELD", "CONFIRMED"}:
+            reservation.status = "CANCELLED"
+            reservation.expires_at = None
+
+    for passenger in booking.passengers:
+        passenger.status = "CANCELLED"
+
+    booking.status = "CANCELLED"
+    booking.expires_at = None
+
+
+def cancel_passenger(reference, passenger_name):
+    if not isinstance(passenger_name, str) or not passenger_name.strip():
+        raise BookingError("Passenger name is required.")
+
+    # Names are stored trimmed, so only surrounding spaces are ignored;
+    # the match is otherwise exact and case-sensitive.
+    passenger_name = passenger_name.strip()
+
+    try:
+        # Same lock order as cancel_booking: booking, then reservations.
+        booking = (
+            db.session.query(Booking)
+            .filter_by(booking_reference=_normalize_reference(reference))
+            .with_for_update()
+            .first()
+        )
+
+        if booking is None:
+            raise BookingError("Booking not found.", 404)
+
+        matches = [
+            p for p in booking.passengers
+            if p.passenger_name == passenger_name
+        ]
+        active_matches = [p for p in matches if p.status == "ACTIVE"]
+
+        if not matches:
+            raise BookingError(
+                "No passenger with this exact name was found in the "
+                "booking.",
+                404,
+            )
+
+        if not active_matches:
+            raise BookingError(
+                "This passenger's ticket is already cancelled.", 409
+            )
+
+        if len(active_matches) > 1:
+            raise BookingError(
+                "More than one passenger in this booking has this name.",
+                409,
+            )
+
+        passenger = active_matches[0]
+
+        now = datetime.now(timezone.utc)
+        blocker = _cancel_blocker(booking, _effective_status(booking, now))
+
+        if blocker:
+            raise BookingError(blocker, 409)
+
+        reservations = (
+            db.session.query(SeatReservation)
+            .filter_by(booking_id=booking.id)
+            .with_for_update()
+            .all()
+        )
+
+        active_count = sum(
+            1 for p in booking.passengers if p.status == "ACTIVE"
+        )
+
+        if active_count == 1:
+            # Cancelling the last active passenger cancels the booking.
+            _cancel_whole_booking(booking, reservations)
+        else:
+            for reservation in reservations:
+                if (
+                    reservation.booking_passenger_id == passenger.id
+                    and reservation.status in {"HELD", "CONFIRMED"}
+                ):
+                    reservation.status = "CANCELLED"
+                    reservation.expires_at = None
+
+            passenger.status = "CANCELLED"
+
+            # Every passenger in a booking pays the same fare, so the
+            # total drops by one share.
+            passenger_fare = (
+                Decimal(booking.total_amount) / active_count
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            booking.total_amount = (
+                Decimal(booking.total_amount) - passenger_fare
+            )
 
         db.session.commit()
 

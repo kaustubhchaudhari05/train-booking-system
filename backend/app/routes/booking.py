@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.services.booking import (
     BookingError,
     cancel_booking,
+    cancel_passenger,
     create_booking,
     confirm_booking,
     get_booking_by_reference,
@@ -151,6 +152,44 @@ def cancel_booking_route(reference):
         return jsonify({
             "error": "DATABASE_ERROR",
             "message": "The booking could not be cancelled.",
+        }), 500
+
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred.",
+        }), 500
+
+
+@booking_bp.post("/<string:reference>/cancel-passenger")
+def cancel_passenger_route(reference):
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "INVALID_JSON",
+            "message": "Request body must be a JSON object.",
+        }), 400
+
+    try:
+        return jsonify(
+            cancel_passenger(reference, data.get("passenger_name"))
+        ), 200
+
+    except BookingError as exc:
+        return jsonify({
+            "error": "BOOKING_ERROR",
+            "message": str(exc),
+        }), exc.status_code
+
+    except SQLAlchemyError:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "DATABASE_ERROR",
+            "message": "The passenger could not be cancelled.",
         }), 500
 
     except Exception:

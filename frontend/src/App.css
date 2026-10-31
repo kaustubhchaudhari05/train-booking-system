@@ -507,27 +507,27 @@ a.link-button {
   color: #a1251c;
 }
 
-.danger-button {
-  justify-self: start;
-  height: 42px;
-  padding: 0 22px;
-  border: 1px solid #e2a19c;
-  border-radius: 9px;
-  background: #ffffff;
+.cancel-help {
+  margin: -8px 0 24px;
+  font-size: 15px;
+}
+
+.booking-page > .booking-result {
+  margin-top: 24px;
+}
+
+.danger-link {
   color: #a1251c;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 750;
-  cursor: pointer;
 }
 
-.danger-button:hover:not(:disabled) {
-  background: #fdecec;
+.booked-passengers li.passenger-cancelled {
+  border-color: #e4e8f0;
+  background: #f5f7fb;
+  color: #8a93a6;
 }
 
-.danger-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.booked-passengers li.passenger-cancelled > span:first-child {
+  text-decoration: line-through;
 }
 
 .booking-meta {

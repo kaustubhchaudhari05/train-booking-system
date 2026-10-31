@@ -272,8 +272,13 @@ export type BookingStatus =
     | "WAITLISTED"
     | "PAYMENT_FAILED";
 
+export type PassengerStatus = "ACTIVE" | "CANCELLED";
+
 // Seat fields are present only when the booking is CONFIRMED.
 export interface BookingDetailsPassenger extends PassengerInput {
+    id: number;
+    status: PassengerStatus;
+    can_cancel: boolean;
     coach_number?: string;
     seat_number?: string;
     berth_type?: string;
@@ -323,19 +328,26 @@ export async function getBooking(reference: string): Promise<BookingDetails> {
     return data as BookingDetails;
 }
 
-export async function cancelBooking(
+// The name must match a passenger in the booking exactly (case-sensitive).
+export async function cancelPassenger(
     reference: string,
+    passengerName: string,
 ): Promise<BookingDetails> {
     const response = await fetch(
-        `${API_BASE_URL}/bookings/${encodeURIComponent(reference)}/cancel`,
-        { method: "POST" },
+        `${API_BASE_URL}/bookings/${encodeURIComponent(reference)}` +
+            "/cancel-passenger",
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ passenger_name: passengerName }),
+        },
     );
 
     const data = await response.json();
 
     if (!response.ok) {
         throw new Error(
-            data.message || data.error || "Failed to cancel booking.",
+            data.message || data.error || "Failed to cancel passenger.",
         );
     }
 

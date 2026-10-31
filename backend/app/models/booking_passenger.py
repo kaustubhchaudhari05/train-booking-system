@@ -23,6 +23,13 @@ class BookingPassenger(db.Model):
         default="NO_PREFERENCE",
     )
 
+    status = db.Column(
+        db.String(20),
+        nullable=False,
+        default="ACTIVE",
+        server_default="ACTIVE",
+    )
+
     booking = db.relationship(
         "Booking",
         back_populates="passengers",
@@ -42,5 +49,9 @@ class BookingPassenger(db.Model):
             "('NO_PREFERENCE', 'LOWER', 'MIDDLE', 'UPPER', "
             "'SIDE_LOWER', 'SIDE_UPPER')",
             name="ck_passenger_berth_preference",
+        ),
+        db.CheckConstraint(
+            "status IN ('ACTIVE', 'CANCELLED')",
+            name="ck_passenger_status",
         ),
     )
