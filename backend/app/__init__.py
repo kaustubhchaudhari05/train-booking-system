@@ -9,6 +9,7 @@ from app.routes.booking import booking_bp
 from app import models
 from app.routes.availability import availability_bp
 from app.routes.fares import fares_bp
+from app.commands import register_commands
 
 
 def create_app():
@@ -27,6 +28,7 @@ def create_app():
     app.register_blueprint(availability_bp)
     app.register_blueprint(booking_bp)
     app.register_blueprint(fares_bp)
+    register_commands(app)
     @app.get("/api/health")
     def health_check():
         return jsonify({
