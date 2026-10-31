@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.extensions import db
@@ -7,6 +7,7 @@ from app.models.booking_passenger import BookingPassenger
 from app.models.coach import Coach
 from app.models.seat import Seat
 from app.models.seat_reservation import SeatReservation
+from app.models.train_route import TrainRoute
 from app.models.train_schedule import TrainSchedule
 from app.services.availability import reserved_seat_ids_query
 from app.services.fare import calculate_fare
@@ -135,7 +136,6 @@ def create_booking(
 
         # Validate that the requested stations and stop orders match
         # this train's actual route.
-        from app.models.train_route import TrainRoute
 
         source_route = TrainRoute.query.filter_by(
             train_id=schedule.train_id,
@@ -377,6 +377,195 @@ def confirm_booking(booking_id):
             "passengers": passenger_results,
             "total_amount": str(booking.total_amount),
         }
+
+    except Exception:
+        db.session.rollback()
+        raise
+
+
+def _as_utc(value):
+    if value is not None and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
+def _effective_status(booking, now):
+    # Expired holds are not yet moved to EXPIRED in the database
+    # (Phase 7), so report them as expired here.
+    expires_at = _as_utc(booking.expires_at)
+    if (
+        booking.status == "PENDING"
+        and expires_at is not None
+        and expires_at <= now
+    ):
+        return "EXPIRED"
+    return booking.status
+
+
+def _serialize_booking(booking, now):
+    schedule = booking.train_schedule
+    train = schedule.train
+
+    routes = {
+        route.stop_order: route
+        for route in TrainRoute.query.filter(
+            TrainRoute.train_id == train.id,
+            TrainRoute.stop_order.in_([
+                booking.source_stop_order,
+                booking.destination_stop_order,
+            ]),
+        )
+    }
+    source_route = routes.get(booking.source_stop_order)
+    destination_route = routes.get(booking.destination_stop_order)
+
+    status = _effective_status(booking, now)
+
+    # Seat details are only shown for confirmed bookings.
+    seats_by_passenger = {}
+    if status == "CONFIRMED":
+        reservations = SeatReservation.query.filter_by(
+            booking_id=booking.id,
+            status="CONFIRMED",
+        ).all()
+        seats_by_passenger = {
+            reservation.booking_passenger_id: reservation.seat
+            for reservation in reservations
+        }
+
+    passengers = []
+    for passenger in booking.passengers:
+        passenger_data = {
+            "passenger_name": passenger.passenger_name,
+            "age": passenger.age,
+            "gender": passenger.gender,
+            "berth_preference": passenger.berth_preference,
+        }
+
+        seat = seats_by_passenger.get(passenger.id)
+        if seat is not None:
+            passenger_data.update({
+                "coach_number": seat.coach.coach_number,
+                "seat_number": seat.seat_number,
+                "berth_type": seat.berth_type,
+            })
+
+        passengers.append(passenger_data)
+
+    def format_time(value):
+        return value.strftime("%H:%M") if value else None
+
+    distance_km = None
+    if source_route and destination_route:
+        distance_km = str(
+            destination_route.distance_km - source_route.distance_km
+        )
+
+    expires_at = _as_utc(booking.expires_at)
+
+    return {
+        "booking_id": booking.id,
+        "booking_reference": booking.booking_reference,
+        "status": status,
+        "coach_class": booking.coach_class,
+        "total_amount": str(booking.total_amount),
+        "expires_at": (
+            expires_at.isoformat()
+            if expires_at and status == "PENDING"
+            else None
+        ),
+        "created_at": _as_utc(booking.created_at).isoformat(),
+        "journey_date": schedule.journey_date.isoformat(),
+        "train": {
+            "train_number": train.train_number,
+            "name": train.name,
+        },
+        "source": {
+            "code": booking.source_station.code,
+            "name": booking.source_station.name,
+            "departure_time": format_time(
+                source_route.departure_time if source_route else None
+            ),
+        },
+        "destination": {
+            "code": booking.destination_station.code,
+            "name": booking.destination_station.name,
+            "arrival_time": format_time(
+                destination_route.arrival_time if destination_route else None
+            ),
+        },
+        "distance_km": distance_km,
+        "can_cancel": _cancel_blocker(booking, status) is None,
+        "passengers": passengers,
+    }
+
+
+def _cancel_blocker(booking, status):
+    # Returns why a booking cannot be cancelled, or None if it can.
+    if status not in {"PENDING", "CONFIRMED"}:
+        return f"Booking cannot be cancelled from status {status}."
+
+    if booking.train_schedule.journey_date < date.today():
+        return "Bookings cannot be cancelled after the journey date."
+
+    return None
+
+
+def _normalize_reference(reference):
+    return (reference or "").strip().upper()
+
+
+def get_booking_by_reference(reference):
+    booking = Booking.query.filter_by(
+        booking_reference=_normalize_reference(reference)
+    ).first()
+
+    if booking is None:
+        raise BookingError("Booking not found.", 404)
+
+    return _serialize_booking(booking, datetime.now(timezone.utc))
+
+
+def cancel_booking(reference):
+    try:
+        # Lock the booking so cancellation cannot race with
+        # confirmation or another cancellation.
+        booking = (
+            db.session.query(Booking)
+            .filter_by(booking_reference=_normalize_reference(reference))
+            .with_for_update()
+            .first()
+        )
+
+        if booking is None:
+            raise BookingError("Booking not found.", 404)
+
+        now = datetime.now(timezone.utc)
+        blocker = _cancel_blocker(booking, _effective_status(booking, now))
+
+        if blocker:
+            raise BookingError(blocker, 409)
+
+        reservations = (
+            db.session.query(SeatReservation)
+            .filter_by(booking_id=booking.id)
+            .with_for_update()
+            .all()
+        )
+
+        # Cancelling the reservations releases the seats for the
+        # booked segment.
+        for reservation in reservations:
+            if reservation.status in {"HELD", "CONFIRMED"}:
+                reservation.status = "CANCELLED"
+                reservation.expires_at = None
+
+        booking.status = "CANCELLED"
+        booking.expires_at = None
+
+        db.session.commit()
+
+        return _serialize_booking(booking, now)
 
     except Exception:
         db.session.rollback()

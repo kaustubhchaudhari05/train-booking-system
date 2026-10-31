@@ -63,9 +63,17 @@ function ConfirmationPage() {
         </section>
       </article>
 
-      <Link className="book-button book-link" to="/">
-        Book another journey
-      </Link>
+      <div className="page-actions">
+        <Link
+          className="book-button book-link"
+          to={`/booking/${booking.booking_reference}`}
+        >
+          View booking
+        </Link>
+        <Link className="link-button" to="/">
+          Book another journey
+        </Link>
+      </div>
     </section>
   );
 }

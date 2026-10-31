@@ -262,3 +262,82 @@ export async function confirmBooking(
 }
 
 
+
+
+export type BookingStatus =
+    | "PENDING"
+    | "CONFIRMED"
+    | "CANCELLED"
+    | "EXPIRED"
+    | "WAITLISTED"
+    | "PAYMENT_FAILED";
+
+// Seat fields are present only when the booking is CONFIRMED.
+export interface BookingDetailsPassenger extends PassengerInput {
+    coach_number?: string;
+    seat_number?: string;
+    berth_type?: string;
+}
+
+export interface BookingDetails {
+    booking_id: number;
+    booking_reference: string;
+    status: BookingStatus;
+    coach_class: CoachClass;
+    total_amount: string;
+    expires_at: string | null;
+    created_at: string;
+    journey_date: string;
+    train: {
+        train_number: string;
+        name: string;
+    };
+    source: {
+        code: string;
+        name: string;
+        departure_time: string | null;
+    };
+    destination: {
+        code: string;
+        name: string;
+        arrival_time: string | null;
+    };
+    distance_km: string | null;
+    can_cancel: boolean;
+    passengers: BookingDetailsPassenger[];
+}
+
+export async function getBooking(reference: string): Promise<BookingDetails> {
+    const response = await fetch(
+        `${API_BASE_URL}/bookings/${encodeURIComponent(reference)}`,
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to load booking.",
+        );
+    }
+
+    return data as BookingDetails;
+}
+
+export async function cancelBooking(
+    reference: string,
+): Promise<BookingDetails> {
+    const response = await fetch(
+        `${API_BASE_URL}/bookings/${encodeURIComponent(reference)}/cancel`,
+        { method: "POST" },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to cancel booking.",
+        );
+    }
+
+    return data as BookingDetails;
+}

@@ -4,8 +4,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.services.booking import (
     BookingError,
+    cancel_booking,
     create_booking,
     confirm_booking,
+    get_booking_by_reference,
 )
 
 booking_bp = Blueprint(
@@ -101,6 +103,54 @@ def confirm_booking_route(booking_id):
         return jsonify({
             "error": "DATABASE_ERROR",
             "message": "The booking could not be confirmed.",
+        }), 500
+
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "INTERNAL_SERVER_ERROR",
+            "message": "An unexpected error occurred.",
+        }), 500
+
+
+@booking_bp.get("/<string:reference>")
+def get_booking_route(reference):
+    try:
+        return jsonify(get_booking_by_reference(reference)), 200
+
+    except BookingError as exc:
+        return jsonify({
+            "error": "BOOKING_ERROR",
+            "message": str(exc),
+        }), exc.status_code
+
+    except SQLAlchemyError:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "DATABASE_ERROR",
+            "message": "The booking could not be loaded.",
+        }), 500
+
+
+@booking_bp.post("/<string:reference>/cancel")
+def cancel_booking_route(reference):
+    try:
+        return jsonify(cancel_booking(reference)), 200
+
+    except BookingError as exc:
+        return jsonify({
+            "error": "BOOKING_ERROR",
+            "message": str(exc),
+        }), exc.status_code
+
+    except SQLAlchemyError:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "DATABASE_ERROR",
+            "message": "The booking could not be cancelled.",
         }), 500
 
     except Exception:

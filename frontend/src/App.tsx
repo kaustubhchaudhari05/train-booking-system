@@ -1,4 +1,6 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
+import BookingDetailsPage from "./pages/BookingDetailsPage";
+import BookingLookupPage from "./pages/BookingLookupPage";
 import BookingPage from "./pages/BookingPage";
 import ConfirmationPage from "./pages/ConfirmationPage";
 import SearchPage from "./pages/SearchPage";
@@ -12,13 +14,18 @@ function App() {
           <span className="brand-icon">🚆</span>
           <span>Railway</span>
         </Link>
-        <span className="header-label">Train Booking System</span>
+        <nav className="header-nav">
+          <Link to="/booking">My booking</Link>
+          <span className="header-label">Train Booking System</span>
+        </nav>
       </header>
 
       <Routes>
         <Route path="/" element={<SearchPage />} />
         <Route path="/book" element={<BookingPage />} />
+        <Route path="/booking" element={<BookingLookupPage />} />
         <Route path="/booking/confirmed" element={<ConfirmationPage />} />
+        <Route path="/booking/:reference" element={<BookingDetailsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
