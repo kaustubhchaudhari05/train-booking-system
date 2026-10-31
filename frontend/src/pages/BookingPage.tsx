@@ -2,19 +2,11 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { type CoachClass, type TrainSearchResult } from "../api";
 import BookingForm from "../components/BookingForm";
 import TrainSummary from "../components/TrainSummary";
+import { formatJourneyDate } from "../format";
 
 export interface BookingPageState {
   train: TrainSearchResult;
   coachClass: CoachClass;
-}
-
-function formatJourneyDate(isoDate: string) {
-  return new Date(`${isoDate}T00:00:00`).toLocaleDateString([], {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function BookingPage() {

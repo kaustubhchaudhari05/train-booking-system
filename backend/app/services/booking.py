@@ -242,14 +242,13 @@ def create_booking(
 
             db.session.add(reservation)
 
+            # Seat details are only returned once the booking is
+            # confirmed (see confirm_booking).
             passenger_results.append({
                 "passenger_name": passenger.passenger_name,
                 "age": passenger.age,
                 "gender": passenger.gender,
                 "berth_preference": passenger.berth_preference,
-                "coach_number": seat.coach.coach_number,
-                "seat_number": seat.seat_number,
-                "berth_type": seat.berth_type,
             })
 
         db.session.commit()
@@ -350,11 +349,32 @@ def confirm_booking(booking_id):
 
         db.session.commit()
 
+        reservation_by_passenger = {
+            reservation.booking_passenger_id: reservation
+            for reservation in reservations
+        }
+
+        passenger_results = []
+
+        for passenger in booking.passengers:
+            seat = reservation_by_passenger[passenger.id].seat
+            passenger_results.append({
+                "passenger_name": passenger.passenger_name,
+                "age": passenger.age,
+                "gender": passenger.gender,
+                "berth_preference": passenger.berth_preference,
+                "coach_number": seat.coach.coach_number,
+                "seat_number": seat.seat_number,
+                "berth_type": seat.berth_type,
+            })
+
         return {
             "booking_id": booking.id,
             "booking_reference": booking.booking_reference,
             "status": booking.status,
+            "coach_class": booking.coach_class,
             "confirmed_seats": len(reservations),
+            "passengers": passenger_results,
             "total_amount": str(booking.total_amount),
         }
 

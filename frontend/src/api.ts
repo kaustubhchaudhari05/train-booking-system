@@ -185,20 +185,31 @@ export interface PassengerInput {
     berth_preference: BerthPreference;
 }
 
-export interface BookedPassenger extends PassengerInput {
+export interface ConfirmedPassenger extends PassengerInput {
     coach_number: string;
     seat_number: string;
     berth_type: string;
 }
 
+// Seat details are not included until the booking is confirmed.
 export interface BookingResult {
     booking_id: number;
     booking_reference: string;
     status: string;
     coach_class: CoachClass;
-    passengers: BookedPassenger[];
+    passengers: PassengerInput[];
     total_amount: string;
     expires_at: string | null;
+}
+
+export interface ConfirmedBooking {
+    booking_id: number;
+    booking_reference: string;
+    status: string;
+    coach_class: CoachClass;
+    confirmed_seats: number;
+    passengers: ConfirmedPassenger[];
+    total_amount: string;
 }
 
 export async function createBooking(params: {
@@ -229,6 +240,25 @@ export async function createBooking(params: {
     }
 
     return data as BookingResult;
+}
+
+export async function confirmBooking(
+    bookingId: number,
+): Promise<ConfirmedBooking> {
+    const response = await fetch(
+        `${API_BASE_URL}/bookings/${bookingId}/confirm`,
+        { method: "POST" },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to confirm booking.",
+        );
+    }
+
+    return data as ConfirmedBooking;
 }
 
 

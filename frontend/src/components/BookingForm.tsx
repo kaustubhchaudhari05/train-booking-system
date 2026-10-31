@@ -9,6 +9,7 @@ import {
   type Gender,
   type TrainSearchResult,
 } from "../api";
+import PendingBooking from "./PendingBooking";
 
 const BERTH_OPTIONS: { value: BerthPreference; label: string }[] = [
   { value: "NO_PREFERENCE", label: "No preference" },
@@ -33,17 +34,6 @@ const emptyPassenger = (): PassengerFormRow => ({
   gender: "",
   berthPreference: "NO_PREFERENCE",
 });
-
-function formatTime(isoString: string | null) {
-  if (!isoString) {
-    return "N/A";
-  }
-
-  return new Date(isoString).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 interface BookingFormProps {
   train: TrainSearchResult;
@@ -159,34 +149,7 @@ function BookingForm({ train, coachClass }: BookingFormProps) {
 
   if (booking) {
     return (
-      <section className="booking-result" aria-live="polite">
-        <h4>Booking pending confirmation</h4>
-        <p className="booking-notice">
-          Your booking is not confirmed yet. Seat numbers are shown after
-          confirmation. Confirm before{" "}
-          <strong>{formatTime(booking.expires_at)}</strong>, or the booking
-          will expire.
-        </p>
-        <p className="booking-meta">
-          Booking reference <strong>{booking.booking_reference}</strong>
-        </p>
-        <p className="booking-meta">
-          Status <strong>{booking.status}</strong> · Total{" "}
-          <strong>₹{booking.total_amount}</strong>
-        </p>
-
-        <ul className="booked-passengers">
-          {booking.passengers.map((passenger, index) => (
-            <li key={index}>
-              <span>
-                {passenger.passenger_name} ({passenger.age},{" "}
-                {passenger.gender.toLowerCase()})
-              </span>
-              <strong>Pending</strong>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <PendingBooking booking={booking} train={train} coachClass={coachClass} />
     );
   }
 

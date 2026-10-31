@@ -425,6 +425,30 @@ a.brand {
   font-size: 14px;
 }
 
+.booking-notice-expired {
+  border-color: #f2b8b5;
+  background: #fdecec;
+  color: #a1251c;
+}
+
+.confirmed-badge {
+  display: inline-block;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #e6f6ec;
+  color: #1b7a3d;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.book-link {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 24px;
+  text-decoration: none;
+}
+
 .booking-meta {
   margin: 0;
   color: #68748a;

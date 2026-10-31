@@ -1,5 +1,6 @@
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 import BookingPage from "./pages/BookingPage";
+import ConfirmationPage from "./pages/ConfirmationPage";
 import SearchPage from "./pages/SearchPage";
 import "./App.css";
 
@@ -17,6 +18,7 @@ function App() {
       <Routes>
         <Route path="/" element={<SearchPage />} />
         <Route path="/book" element={<BookingPage />} />
+        <Route path="/booking/confirmed" element={<ConfirmationPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
