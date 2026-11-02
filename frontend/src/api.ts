@@ -95,6 +95,7 @@ interface SeatAvailabilityResponse {
     destination_stop_order: number;
     available_seats: AvailableSeat[];
     count: number;
+    waitlist_count: number;
 }
 
 export async function getSeatAvailability(params: {
@@ -185,19 +186,27 @@ export interface PassengerInput {
     berth_preference: BerthPreference;
 }
 
-export interface ConfirmedPassenger extends PassengerInput {
-    coach_number: string;
-    seat_number: string;
-    berth_type: string;
+export type PassengerStatus = "ACTIVE" | "WAITLISTED" | "CANCELLED";
+
+// Seat fields are present only for seated passengers of a confirmed
+// booking. waitlist_position is set only for waitlisted passengers whose
+// booking is CONFIRMED or WAITLISTED (i.e. who are in the queue).
+export interface BookedPassenger extends PassengerInput {
+    id: number;
+    status: PassengerStatus;
+    waitlist_position: number | null;
+    coach_number?: string;
+    seat_number?: string;
+    berth_type?: string;
 }
 
 // Seat details are not included until the booking is confirmed.
 export interface BookingResult {
     booking_id: number;
     booking_reference: string;
-    status: string;
+    status: BookingStatus;
     coach_class: CoachClass;
-    passengers: PassengerInput[];
+    passengers: BookedPassenger[];
     total_amount: string;
     expires_at: string | null;
 }
@@ -205,10 +214,10 @@ export interface BookingResult {
 export interface ConfirmedBooking {
     booking_id: number;
     booking_reference: string;
-    status: string;
+    status: BookingStatus;
     coach_class: CoachClass;
     confirmed_seats: number;
-    passengers: ConfirmedPassenger[];
+    passengers: BookedPassenger[];
     total_amount: string;
 }
 
@@ -272,16 +281,8 @@ export type BookingStatus =
     | "WAITLISTED"
     | "PAYMENT_FAILED";
 
-export type PassengerStatus = "ACTIVE" | "CANCELLED";
-
-// Seat fields are present only when the booking is CONFIRMED.
-export interface BookingDetailsPassenger extends PassengerInput {
-    id: number;
-    status: PassengerStatus;
+export interface BookingDetailsPassenger extends BookedPassenger {
     can_cancel: boolean;
-    coach_number?: string;
-    seat_number?: string;
-    berth_type?: string;
 }
 
 export interface BookingDetails {

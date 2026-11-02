@@ -329,6 +329,15 @@ a.brand {
   font-size: 18px;
 }
 
+.availability-count.waitlist strong {
+  color: #b45309;
+}
+
+.waitlist-badge {
+  background: #fff8e6;
+  color: #7a4b00;
+}
+
 .fare-summary {
   margin: 8px 0 0;
   color: #68748a;

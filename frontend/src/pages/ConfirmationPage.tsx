@@ -5,7 +5,7 @@ import {
   type TrainSearchResult,
 } from "../api";
 import TrainSummary from "../components/TrainSummary";
-import { BERTH_LABELS, formatJourneyDate } from "../format";
+import { formatJourneyDate, passengerSeatLabel } from "../format";
 
 export interface ConfirmationPageState {
   train: TrainSearchResult;
@@ -26,8 +26,17 @@ function ConfirmationPage() {
 
   return (
     <section className="booking-page">
-      <p className="confirmed-badge">✓ Booking confirmed</p>
-      <h1>Your ticket is confirmed.</h1>
+      {booking.status === "WAITLISTED" ? (
+        <>
+          <p className="confirmed-badge waitlist-badge">Waitlisted</p>
+          <h1>Your booking is on the waitlist.</h1>
+        </>
+      ) : (
+        <>
+          <p className="confirmed-badge">✓ Booking confirmed</p>
+          <h1>Your ticket is confirmed.</h1>
+        </>
+      )}
 
       <article className="train-card">
         <TrainSummary train={train} />
@@ -46,17 +55,22 @@ function ConfirmationPage() {
             <strong>₹{booking.total_amount}</strong>
           </p>
 
+          {booking.passengers.some((p) => p.status === "WAITLISTED") && (
+            <p className="booking-notice">
+              Waitlisted passengers get a seat automatically, in waitlist
+              order, when one becomes free. Check the booking details for
+              updates.
+            </p>
+          )}
+
           <ul className="booked-passengers">
-            {booking.passengers.map((passenger, index) => (
-              <li key={index}>
+            {booking.passengers.map((passenger) => (
+              <li key={passenger.id}>
                 <span>
                   {passenger.passenger_name} ({passenger.age},{" "}
                   {passenger.gender.toLowerCase()})
                 </span>
-                <strong>
-                  {passenger.coach_number} / {passenger.seat_number}{" "}
-                  {BERTH_LABELS[passenger.berth_type] ?? passenger.berth_type}
-                </strong>
+                <strong>{passengerSeatLabel(passenger, booking.status)}</strong>
               </li>
             ))}
           </ul>

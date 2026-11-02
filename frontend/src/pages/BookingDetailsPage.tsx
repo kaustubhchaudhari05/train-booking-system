@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getBooking, type BookingDetails } from "../api";
-import { BERTH_LABELS, formatJourneyDate, formatTime } from "../format";
+import { formatJourneyDate, formatTime, passengerSeatLabel } from "../format";
 
 const STATUS_CLASS: Record<string, string> = {
   CONFIRMED: "status-confirmed",
   PENDING: "status-pending",
+  WAITLISTED: "status-pending",
   CANCELLED: "status-closed",
   EXPIRED: "status-closed",
 };
@@ -109,6 +110,15 @@ function BookingDetailsPage() {
               </p>
             )}
 
+            {booking.passengers.some((p) => p.status === "WAITLISTED") &&
+              (booking.status === "CONFIRMED" ||
+                booking.status === "WAITLISTED") && (
+                <p className="booking-notice">
+                  Waitlisted passengers get a seat automatically, in
+                  waitlist order, when one becomes free.
+                </p>
+              )}
+
             {booking.status === "CANCELLED" && (
               <p className="booking-notice booking-notice-expired">
                 This booking has been cancelled and its seats released.
@@ -137,16 +147,7 @@ function BookingDetailsPage() {
                       {passenger.gender.toLowerCase()})
                     </span>
                     <strong>
-                      {passengerCancelled
-                        ? "Cancelled"
-                        : passenger.seat_number
-                          ? `${passenger.coach_number} / ${passenger.seat_number} ${
-                              BERTH_LABELS[passenger.berth_type ?? ""] ??
-                              passenger.berth_type
-                            }`
-                          : booking.status === "PENDING"
-                            ? "Pending"
-                            : "—"}
+                      {passengerSeatLabel(passenger, booking.status)}
                     </strong>
                   </li>
                 );

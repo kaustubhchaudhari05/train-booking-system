@@ -10,5 +10,7 @@ def register_commands(app):
         result = expire_stale_holds()
         click.echo(
             f"Expired {result['expired_bookings']} booking(s) and "
-            f"{result['expired_reservations']} reservation(s)."
+            f"{result['expired_reservations']} reservation(s). "
+            f"Promoted {result['promoted_passengers']} waitlisted "
+            "passenger(s)."
         )

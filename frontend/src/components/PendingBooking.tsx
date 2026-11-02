@@ -6,7 +6,7 @@ import {
   type CoachClass,
   type TrainSearchResult,
 } from "../api";
-import { formatTime } from "../format";
+import { formatTime, passengerSeatLabel } from "../format";
 import { type ConfirmationPageState } from "../pages/ConfirmationPage";
 
 function secondsUntil(isoString: string | null) {
@@ -54,6 +54,9 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
 
   // The backend also rejects expired holds; this only keeps the UI honest.
   const expired = secondsLeft === 0;
+  const waitlistedCount = booking.passengers.filter(
+    (passenger) => passenger.status === "WAITLISTED",
+  ).length;
 
   async function handleConfirm() {
     setError("");
@@ -105,14 +108,23 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
         <strong>₹{booking.total_amount}</strong>
       </p>
 
+      {waitlistedCount > 0 && !expired && (
+        <p className="booking-notice">
+          Not enough seats were free, so {waitlistedCount} passenger
+          {waitlistedCount === 1 ? " is" : "s are"} waitlisted. They join the
+          waitlist when you confirm and get a seat automatically when one
+          becomes free.
+        </p>
+      )}
+
       <ul className="booked-passengers">
-        {booking.passengers.map((passenger, index) => (
-          <li key={index}>
+        {booking.passengers.map((passenger) => (
+          <li key={passenger.id}>
             <span>
               {passenger.passenger_name} ({passenger.age},{" "}
               {passenger.gender.toLowerCase()})
             </span>
-            <strong>Pending</strong>
+            <strong>{passengerSeatLabel(passenger)}</strong>
           </li>
         ))}
       </ul>

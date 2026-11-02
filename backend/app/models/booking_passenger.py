@@ -51,7 +51,7 @@ class BookingPassenger(db.Model):
             name="ck_passenger_berth_preference",
         ),
         db.CheckConstraint(
-            "status IN ('ACTIVE', 'CANCELLED')",
+            "status IN ('ACTIVE', 'WAITLISTED', 'CANCELLED')",
             name="ck_passenger_status",
         ),
     )

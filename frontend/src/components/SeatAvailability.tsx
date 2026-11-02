@@ -13,6 +13,7 @@ interface SeatAvailabilityProps {
 // Mount with a key of schedule + class so each selection starts fresh.
 function SeatAvailability({ train, coachClass }: SeatAvailabilityProps) {
   const [count, setCount] = useState(0);
+  const [waitlistCount, setWaitlistCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -28,6 +29,7 @@ function SeatAvailability({ train, coachClass }: SeatAvailabilityProps) {
       .then((result) => {
         if (!cancelled) {
           setCount(result.count);
+          setWaitlistCount(result.waitlist_count);
         }
       })
       .catch((err: unknown) => {
@@ -60,8 +62,8 @@ function SeatAvailability({ train, coachClass }: SeatAvailabilityProps) {
 
   if (count === 0) {
     return (
-      <p className="status-message">
-        No seats available
+      <p className="availability-count waitlist">
+        <strong>WL-{waitlistCount}</strong>
       </p>
     );
   }

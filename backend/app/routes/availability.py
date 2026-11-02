@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 
 from app.services.availability import get_available_seats
+from app.services.waitlist import waitlist_count
 
 availability_bp = Blueprint(
     "availability",
@@ -65,4 +66,7 @@ def get_seat_availability(train_schedule_id):
             for seat in seats
         ],
         "count": len(seats),
+        "waitlist_count": waitlist_count(
+            train_schedule_id, coach_class, source, destination
+        ),
     }), 200

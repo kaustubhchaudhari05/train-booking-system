@@ -10,6 +10,7 @@ import {
   type TrainSearchResult,
 } from "../api";
 import PendingBooking from "./PendingBooking";
+import WaitlistedBooking from "./WaitlistedBooking";
 
 const BERTH_OPTIONS: { value: BerthPreference; label: string }[] = [
   { value: "NO_PREFERENCE", label: "No preference" },
@@ -145,6 +146,10 @@ function BookingForm({ train, coachClass }: BookingFormProps) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (booking?.status === "WAITLISTED") {
+    return <WaitlistedBooking booking={booking} />;
   }
 
   if (booking) {

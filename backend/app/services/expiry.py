@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from app.extensions import db
 from app.models.booking import Booking
 from app.models.seat_reservation import SeatReservation
+from app.services.waitlist import lock_schedule, promote_waitlist
 
 
 def expire_stale_holds(now=None):
@@ -10,7 +11,8 @@ def expire_stale_holds(now=None):
     reservations, as EXPIRED.
 
     Safe to run repeatedly: already-expired rows no longer match.
-    CONFIRMED and CANCELLED bookings and reservations are never touched.
+    CONFIRMED and CANCELLED bookings and reservations are never touched,
+    except that waitlisted passengers are promoted into released seats.
     """
     now = now or datetime.now(timezone.utc)
 
@@ -29,9 +31,17 @@ def expire_stale_holds(now=None):
         ).scalars().all()
 
         if not bookings:
-            return {"expired_bookings": 0, "expired_reservations": 0}
+            return {
+                "expired_bookings": 0,
+                "expired_reservations": 0,
+                "promoted_passengers": 0,
+            }
 
         booking_ids = [booking.id for booking in bookings]
+        affected = {
+            (booking.train_schedule_id, booking.coach_class)
+            for booking in bookings
+        }
 
         reservations = db.session.execute(
             db.select(SeatReservation)
@@ -50,11 +60,29 @@ def expire_stale_holds(now=None):
 
         db.session.commit()
 
-        return {
-            "expired_bookings": len(bookings),
-            "expired_reservations": len(reservations),
-        }
+        expired_bookings = len(bookings)
+        expired_reservations = len(reservations)
 
     except Exception:
         db.session.rollback()
         raise
+
+    # Give the released seats to waitlisted passengers, one schedule and
+    # class at a time, each under its own schedule lock.
+    promoted = 0
+
+    for train_schedule_id, coach_class in sorted(affected):
+        try:
+            schedule = lock_schedule(train_schedule_id)
+            if schedule is not None:
+                promoted += promote_waitlist(schedule, coach_class, now)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+    return {
+        "expired_bookings": expired_bookings,
+        "expired_reservations": expired_reservations,
+        "promoted_passengers": promoted,
+    }
