@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  confirmBooking,
+  createPaymentOrder,
+  verifyPayment,
   type BookingResult,
   type CoachClass,
+  type RazorpayCheckoutResult,
   type TrainSearchResult,
 } from "../api";
 import { formatTime, passengerSeatLabel } from "../format";
+import { openRazorpayCheckout } from "../razorpay";
 import { type ConfirmationPageState } from "../pages/ConfirmationPage";
 
 function secondsUntil(isoString: string | null) {
@@ -37,7 +40,9 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
   const [secondsLeft, setSecondsLeft] = useState(() =>
     secondsUntil(booking.expires_at),
   );
-  const [confirming, setConfirming] = useState(false);
+  // "paying" covers the Checkout window; "verifying" the server check.
+  const [paying, setPaying] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -58,12 +63,14 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
     (passenger) => passenger.status === "WAITLISTED",
   ).length;
 
-  async function handleConfirm() {
-    setError("");
-    setConfirming(true);
+  const fullyWaitlisted =
+    booking.passengers.length > 0 && waitlistedCount === booking.passengers.length;
+
+  async function finishPayment(result: RazorpayCheckoutResult) {
+    setVerifying(true);
 
     try {
-      const confirmed = await confirmBooking(booking.booking_id);
+      const confirmed = await verifyPayment(result);
       const state: ConfirmationPageState = {
         train,
         coachClass,
@@ -74,15 +81,48 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
       navigate("/booking/confirmed", { state, replace: true });
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Failed to confirm booking.",
+        err instanceof Error ? err.message : "Failed to verify payment.",
       );
-      setConfirming(false);
+      setVerifying(false);
+      setPaying(false);
+    }
+  }
+
+  async function handlePay() {
+    setError("");
+    setPaying(true);
+
+    try {
+      const order = await createPaymentOrder(booking.booking_id);
+
+      await openRazorpayCheckout(
+        {
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency,
+          order_id: order.order_id,
+          name: "Train Booking System",
+          description: `Booking ${order.booking_reference}`,
+          timeout: order.hold_seconds_left,
+          handler: (result) => void finishPayment(result),
+          modal: { ondismiss: () => setPaying(false) },
+          theme: { color: "#285bd4" },
+        },
+        // Checkout stays open so the user can retry another method.
+        (failure) =>
+          setError(failure.error.description ?? "Payment failed. Try again."),
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to start payment.",
+      );
+      setPaying(false);
     }
   }
 
   return (
     <section className="booking-result" aria-live="polite">
-      <h4>Booking pending confirmation</h4>
+      <h4>Booking pending payment</h4>
 
       {expired ? (
         <p className="booking-notice booking-notice-expired">
@@ -91,7 +131,7 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
       ) : (
         <p className="booking-notice">
           Your booking is not confirmed yet. Seat numbers are shown after
-          confirmation. Confirm before{" "}
+          payment. Pay before{" "}
           <strong>{formatTime(booking.expires_at)}</strong>
           {secondsLeft !== null && (
             <> ({formatCountdown(secondsLeft)} left)</>
@@ -110,10 +150,14 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
 
       {waitlistedCount > 0 && !expired && (
         <p className="booking-notice">
-          Not enough seats were free, so {waitlistedCount} passenger
-          {waitlistedCount === 1 ? " is" : "s are"} waitlisted. They join the
-          waitlist when you confirm and get a seat automatically when one
-          becomes free.
+          {fullyWaitlisted
+            ? "No seats were free, so all passengers are waitlisted."
+            : `Not enough seats were free, so ${waitlistedCount} passenger${
+                waitlistedCount === 1 ? " is" : "s are"
+              } waitlisted.`}{" "}
+          The full total is paid now. Waitlisted passengers join the waitlist
+          once payment succeeds and get a seat automatically when one becomes
+          free.
         </p>
       )}
 
@@ -134,10 +178,14 @@ function PendingBooking({ booking, train, coachClass }: PendingBookingProps) {
       <button
         className="search-button"
         type="button"
-        onClick={handleConfirm}
-        disabled={expired || confirming}
+        onClick={handlePay}
+        disabled={expired || paying}
       >
-        {confirming ? "Confirming..." : "Confirm booking"}
+        {verifying
+          ? "Verifying payment..."
+          : paying
+            ? "Waiting for payment..."
+            : `Pay ₹${booking.total_amount}`}
       </button>
     </section>
   );

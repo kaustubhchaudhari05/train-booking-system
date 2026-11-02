@@ -16,8 +16,7 @@ export interface ConfirmationPageState {
 function ConfirmationPage() {
   const state = useLocation().state as ConfirmationPageState | null;
 
-  // Booking lookup by reference arrives in Phase 6; until then this page
-  // only works when reached from a successful confirmation.
+  // Only reachable from a verified payment; a direct visit has no data.
   if (!state?.booking || !state.train) {
     return <Navigate to="/" replace />;
   }
@@ -28,12 +27,16 @@ function ConfirmationPage() {
     <section className="booking-page">
       {booking.status === "WAITLISTED" ? (
         <>
-          <p className="confirmed-badge waitlist-badge">Waitlisted</p>
+          <p className="confirmed-badge waitlist-badge">
+            ✓ Payment received · Waitlisted
+          </p>
           <h1>Your booking is on the waitlist.</h1>
         </>
       ) : (
         <>
-          <p className="confirmed-badge">✓ Booking confirmed</p>
+          <p className="confirmed-badge">
+            ✓ Payment received · Booking confirmed
+          </p>
           <h1>Your ticket is confirmed.</h1>
         </>
       )}

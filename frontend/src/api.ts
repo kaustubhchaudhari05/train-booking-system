@@ -251,26 +251,66 @@ export async function createBooking(params: {
     return data as BookingResult;
 }
 
-export async function confirmBooking(
+export interface PaymentOrder {
+    payment_id: number;
+    key_id: string;
+    order_id: string;
+    // In paise, as Razorpay Checkout expects.
+    amount: number;
+    currency: string;
+    booking_reference: string;
+    expires_at: string;
+    hold_seconds_left: number;
+}
+
+export async function createPaymentOrder(
     bookingId: number,
-): Promise<ConfirmedBooking> {
-    const response = await fetch(
-        `${API_BASE_URL}/bookings/${bookingId}/confirm`,
-        { method: "POST" },
-    );
+): Promise<PaymentOrder> {
+    const response = await fetch(`${API_BASE_URL}/payments/order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: bookingId }),
+    });
 
     const data = await response.json();
 
     if (!response.ok) {
         throw new Error(
-            data.message || data.error || "Failed to confirm booking.",
+            data.message || data.error || "Failed to start payment.",
+        );
+    }
+
+    return data as PaymentOrder;
+}
+
+// What Razorpay Checkout hands to its success handler.
+export interface RazorpayCheckoutResult {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+}
+
+// The server checks the signature and the payment with Razorpay before
+// confirming the booking; a Checkout success alone proves nothing.
+export async function verifyPayment(
+    result: RazorpayCheckoutResult,
+): Promise<ConfirmedBooking> {
+    const response = await fetch(`${API_BASE_URL}/payments/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(result),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to verify payment.",
         );
     }
 
     return data as ConfirmedBooking;
 }
-
-
 
 
 export type BookingStatus =

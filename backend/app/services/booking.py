@@ -188,13 +188,13 @@ def create_booking(
         )
 
         # Passengers get seats in the order entered; the rest are
-        # waitlisted. With no seats at all the whole booking is
-        # waitlisted and needs no confirmation.
+        # waitlisted. Every booking, even a fully waitlisted one, is
+        # PENDING until paid; waitlisted passengers join the queue only
+        # once payment confirms the booking.
         seated_count = min(len(available), len(passengers))
         assigned_seats = _assign_seats(
             passengers[:seated_count], available
         )
-        fully_waitlisted = seated_count == 0
 
         booking = Booking(
             booking_reference=uuid4().hex[:20].upper(),
@@ -204,9 +204,9 @@ def create_booking(
             source_stop_order=source_stop_order,
             destination_stop_order=destination_stop_order,
             coach_class=coach_class,
-            status="WAITLISTED" if fully_waitlisted else "PENDING",
+            status="PENDING",
             total_amount=passenger_fare * len(passengers),
-            expires_at=None if fully_waitlisted else hold_expiry,
+            expires_at=hold_expiry,
         )
 
         db.session.add(booking)
@@ -238,7 +238,7 @@ def create_booking(
         db.session.flush()
 
         # Seat details are only returned once the booking is confirmed.
-        result = _booking_summary(booking, include_seats=False)
+        result = booking_summary(booking, include_seats=False)
 
         db.session.commit()
 
@@ -270,7 +270,7 @@ def _passenger_summary(passenger, booking, seat=None):
     return data
 
 
-def _booking_summary(booking, include_seats):
+def booking_summary(booking, include_seats):
     # Used by create and confirm. Cancelled passengers are left out.
     seats_by_passenger = {}
     if include_seats:
@@ -309,7 +309,7 @@ def _booking_summary(booking, include_seats):
 
 
 
-def _lock_booking(**filters):
+def lock_booking(**filters):
     """Lock a booking's schedule, then the booking itself.
 
     Locking the schedule first keeps the lock order the same as booking
@@ -329,124 +329,100 @@ def _lock_booking(**filters):
     ).scalar_one_or_none()
 
 
-def confirm_booking(booking_id):
-    try:
-        # Lock so concurrent confirmation attempts cannot process the
-        # booking at the same time.
-        booking = _lock_booking(id=booking_id)
+def confirm_locked_booking(booking, now):
+    """Confirm a PENDING booking after its payment has been verified.
 
-        if booking is None:
-            raise BookingError("Booking not found.", 404)
-
-        if booking.status != "PENDING":
-            raise BookingError(
-                f"Booking cannot be confirmed from status {booking.status}.",
-                409,
-            )
-
-        now = datetime.now(timezone.utc)
-
-        # Do not confirm an expired booking.
-        if booking.expires_at is not None:
-            expiry = booking.expires_at
-            if expiry.tzinfo is None:
-                expiry = expiry.replace(tzinfo=timezone.utc)
-
-            if expiry <= now:
-                raise BookingError(
-                    "Booking hold has expired. Please create a new booking.",
-                    409,
-                )
-
-        # Only seated (ACTIVE) passengers have reservations to confirm.
-        # Cancelled passengers are left out, and waitlisted passengers
-        # join the waitlist queue once the booking is confirmed.
-        active_passengers = [
-            passenger for passenger in booking.passengers
-            if passenger.status == "ACTIVE"
-        ]
-        has_waitlisted = any(
-            passenger.status == "WAITLISTED"
-            for passenger in booking.passengers
+    The caller must hold the booking's lock (see `lock_booking`) and
+    commits or rolls back. Every check runs before anything is changed,
+    so a BookingError leaves the booking untouched.
+    """
+    if booking.status != "PENDING":
+        raise BookingError(
+            f"Booking cannot be confirmed from status {booking.status}.",
+            409,
         )
 
-        if not active_passengers and has_waitlisted:
-            # Every seated passenger was cancelled while pending, so
-            # only waitlisted passengers remain.
-            booking.status = "WAITLISTED"
-            booking.expires_at = None
-            promote_waitlist(
-                booking.train_schedule, booking.coach_class, now
-            )
-            db.session.flush()
-
-            result = _booking_summary(booking, include_seats=True)
-            db.session.commit()
-            return result
-
-        # Lock the active passengers' reservations.
-        reservations = (
-            db.session.query(SeatReservation)
-            .filter(
-                SeatReservation.booking_id == booking.id,
-                SeatReservation.booking_passenger_id.in_(
-                    [passenger.id for passenger in active_passengers]
-                ),
-            )
-            .with_for_update()
-            .all()
+    # Do not confirm an expired booking.
+    expiry = _as_utc(booking.expires_at)
+    if expiry is not None and expiry <= now:
+        raise BookingError(
+            "Booking hold has expired. Please create a new booking.",
+            409,
         )
 
-        if not reservations or len(reservations) != len(active_passengers):
-            raise BookingError(
-                "Booking does not have a reservation for every passenger.",
-                409,
-            )
+    # Only seated (ACTIVE) passengers have reservations to confirm.
+    # Cancelled passengers are left out, and waitlisted passengers
+    # join the waitlist queue once the booking is confirmed.
+    active_passengers = [
+        passenger for passenger in booking.passengers
+        if passenger.status == "ACTIVE"
+    ]
+    has_waitlisted = any(
+        passenger.status == "WAITLISTED"
+        for passenger in booking.passengers
+    )
 
-        # Validate every reservation before changing any status.
-        for reservation in reservations:
-            if reservation.status != "HELD":
-                raise BookingError(
-                    "All seat reservations must be HELD to confirm this booking.",
-                    409,
-                )
-
-            if reservation.expires_at is not None:
-                expiry = reservation.expires_at
-                if expiry.tzinfo is None:
-                    expiry = expiry.replace(tzinfo=timezone.utc)
-
-                if expiry <= now:
-                    raise BookingError(
-                        "A seat reservation has expired. Please create a new booking.",
-                        409,
-                    )
-
-        # Update the booking and reservations in one transaction.
-        booking.status = "CONFIRMED"
+    if not active_passengers and has_waitlisted:
+        # No passenger got a seat (or every seated passenger was
+        # cancelled while pending), so the booking is waitlisted.
+        booking.status = "WAITLISTED"
         booking.expires_at = None
-
-        for reservation in reservations:
-            reservation.status = "CONFIRMED"
-            reservation.expires_at = None
-
+        promote_waitlist(booking.train_schedule, booking.coach_class, now)
         db.session.flush()
 
-        if has_waitlisted:
-            # The booking's waitlisted passengers are now in the queue;
-            # seat them straight away if seats are free.
-            promote_waitlist(
-                booking.train_schedule, booking.coach_class, now
+        return booking_summary(booking, include_seats=True)
+
+    # Lock the active passengers' reservations.
+    reservations = (
+        db.session.query(SeatReservation)
+        .filter(
+            SeatReservation.booking_id == booking.id,
+            SeatReservation.booking_passenger_id.in_(
+                [passenger.id for passenger in active_passengers]
+            ),
+        )
+        .with_for_update()
+        .all()
+    )
+
+    if not reservations or len(reservations) != len(active_passengers):
+        raise BookingError(
+            "Booking does not have a reservation for every passenger.",
+            409,
+        )
+
+    # Validate every reservation before changing any status.
+    for reservation in reservations:
+        if reservation.status != "HELD":
+            raise BookingError(
+                "All seat reservations must be HELD to confirm this booking.",
+                409,
             )
-            db.session.flush()
 
-        result = _booking_summary(booking, include_seats=True)
-        db.session.commit()
-        return result
+        expiry = _as_utc(reservation.expires_at)
+        if expiry is not None and expiry <= now:
+            raise BookingError(
+                "A seat reservation has expired. Please create a new booking.",
+                409,
+            )
 
-    except Exception:
-        db.session.rollback()
-        raise
+    # Update the booking and reservations in one transaction.
+    booking.status = "CONFIRMED"
+    booking.expires_at = None
+
+    for reservation in reservations:
+        reservation.status = "CONFIRMED"
+        reservation.expires_at = None
+
+    db.session.flush()
+
+    if has_waitlisted:
+        # The booking's waitlisted passengers are now in the queue;
+        # seat them straight away if seats are free.
+        promote_waitlist(booking.train_schedule, booking.coach_class, now)
+        db.session.flush()
+
+    return booking_summary(booking, include_seats=True)
 
 
 def _as_utc(value):
@@ -605,7 +581,7 @@ def cancel_booking(reference):
     try:
         # Lock so cancellation cannot race with confirmation, another
         # cancellation, or waitlist promotion.
-        booking = _lock_booking(
+        booking = lock_booking(
             booking_reference=_normalize_reference(reference)
         )
 
@@ -666,7 +642,7 @@ def cancel_passenger(reference, passenger_name):
     try:
         # Same lock order as cancel_booking: schedule, booking, then
         # reservations.
-        booking = _lock_booking(
+        booking = lock_booking(
             booking_reference=_normalize_reference(reference)
         )
 

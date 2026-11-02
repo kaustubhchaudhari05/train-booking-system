@@ -105,7 +105,7 @@ function BookingDetailsPage() {
 
             {booking.status === "PENDING" && (
               <p className="booking-notice">
-                This booking is not confirmed yet. The seat hold expires at{" "}
+                This booking is not paid yet. The seat hold expires at{" "}
                 <strong>{formatTime(booking.expires_at)}</strong>.
               </p>
             )}
