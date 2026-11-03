@@ -9,5 +9,6 @@ from app.models.booking_passenger import BookingPassenger
 from app.models.seat_reservation import SeatReservation
 from app.models.fare import Fare
 from app.models.payment import Payment
+from app.models.user import User
 
-__all__ = ["Station", "Train", "TrainRoute","TrainSchedule", "Coach", "Seat", "Booking", "BookingPassenger", "SeatReservation", "Fare", "Payment" ]
+__all__ = ["Station", "Train", "TrainRoute","TrainSchedule", "Coach", "Seat", "Booking", "BookingPassenger", "SeatReservation", "Fare", "Payment", "User" ]

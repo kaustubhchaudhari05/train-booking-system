@@ -38,6 +38,14 @@ class Booking(db.Model):
 
     coach_class = db.Column(db.String(2), nullable=False)
 
+    # Owner of the booking. Bookings made before authentication have none.
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+
     status = db.Column(
         db.String(20),
         nullable=False,
@@ -60,6 +68,7 @@ class Booking(db.Model):
     )
 
     train_schedule = db.relationship("TrainSchedule")
+    user = db.relationship("User")
     source_station = db.relationship(
         "Station",
         foreign_keys=[source_station_id],

@@ -2,7 +2,9 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 
 from config import Config
-from app.extensions import db, migrate
+from app.extensions import db, jwt, migrate
+from app.auth import refresh_expiring_token
+from app.routes.auth import auth_bp
 from app.routes.stations import stations_bp
 from app.routes.trains import trains_bp
 from app.routes.booking import booking_bp
@@ -21,9 +23,15 @@ def create_app():
     ]}})    
     app.config.from_object(Config)
 
+    if not app.config.get("JWT_SECRET_KEY"):
+        raise RuntimeError("JWT_SECRET_KEY must be set in .env.")
+
     db.init_app(app)
     migrate.init_app(app, db)
+    jwt.init_app(app)
+    app.after_request(refresh_expiring_token)
 
+    app.register_blueprint(auth_bp)
     app.register_blueprint(stations_bp)
     app.register_blueprint(trains_bp)
     app.register_blueprint(availability_bp)

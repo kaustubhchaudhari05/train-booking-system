@@ -1,4 +1,39 @@
-const API_BASE_URL = "http://127.0.0.1:5000/api";
+// Proxied to Flask by the Vite dev server (see vite.config.ts), so the
+// login cookies stay first-party.
+const API_BASE_URL = "/api";
+
+// Fired when the API answers 401, so the app can drop the stale user.
+export const AUTH_EXPIRED_EVENT = "auth:expired";
+
+function csrfToken() {
+    const match = document.cookie.match(
+        /(?:^|;\s*)csrf_access_token=([^;]+)/,
+    );
+    return match ? decodeURIComponent(match[1]) : "";
+}
+
+// All API calls go through here. The JWT travels in an httpOnly cookie;
+// writes also send the CSRF token from its readable companion cookie.
+async function apiFetch(path: string, init: RequestInit = {}) {
+    const method = (init.method ?? "GET").toUpperCase();
+    const headers = new Headers(init.headers);
+
+    if (method !== "GET") {
+        headers.set("X-CSRF-TOKEN", csrfToken());
+    }
+
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        ...init,
+        headers,
+        credentials: "same-origin",
+    });
+
+    if (response.status === 401) {
+        window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+    }
+
+    return response;
+}
 
 export interface Station {
     id: number;
@@ -14,7 +49,7 @@ interface StationsResponse {
 }
 
 export async function getStations(): Promise<Station[]> {
-    const response = await fetch(`${API_BASE_URL}/stations`);
+    const response = await apiFetch(`/stations`);
 
     if (!response.ok) {
         throw new Error("Unable to load stations. Please try again.");
@@ -62,8 +97,8 @@ export async function searchTrains(params: {
 }): Promise<TrainSearchResponse> {
     const query = new URLSearchParams(params);
 
-    const response = await fetch(
-        `${API_BASE_URL}/trains/search?${query.toString()}`,
+    const response = await apiFetch(
+        `/trains/search?${query.toString()}`,
     );
 
     const data = await response.json();
@@ -110,8 +145,8 @@ export async function getSeatAvailability(params: {
         destination_stop_order: String(params.destinationStopOrder),
     });
 
-    const response = await fetch(
-        `${API_BASE_URL}/availability/${params.scheduleId}?${query.toString()}`,
+    const response = await apiFetch(
+        `/availability/${params.scheduleId}?${query.toString()}`,
     );
 
     const data = await response.json();
@@ -151,8 +186,8 @@ export async function getFareQuote(params: {
         passengers: String(params.passengers ?? 1),
     });
 
-    const response = await fetch(
-        `${API_BASE_URL}/fares/quote?${query.toString()}`,
+    const response = await apiFetch(
+        `/fares/quote?${query.toString()}`,
     );
 
     const data = await response.json();
@@ -226,7 +261,7 @@ export async function createBooking(params: {
     coachClass: CoachClass;
     passengers: PassengerInput[];
 }): Promise<BookingResult> {
-    const response = await fetch(`${API_BASE_URL}/bookings`, {
+    const response = await apiFetch(`/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -266,7 +301,7 @@ export interface PaymentOrder {
 export async function createPaymentOrder(
     bookingId: number,
 ): Promise<PaymentOrder> {
-    const response = await fetch(`${API_BASE_URL}/payments/order`, {
+    const response = await apiFetch(`/payments/order`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ booking_id: bookingId }),
@@ -295,7 +330,7 @@ export interface RazorpayCheckoutResult {
 export async function verifyPayment(
     result: RazorpayCheckoutResult,
 ): Promise<ConfirmedBooking> {
-    const response = await fetch(`${API_BASE_URL}/payments/verify`, {
+    const response = await apiFetch(`/payments/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(result),
@@ -354,8 +389,8 @@ export interface BookingDetails {
 }
 
 export async function getBooking(reference: string): Promise<BookingDetails> {
-    const response = await fetch(
-        `${API_BASE_URL}/bookings/${encodeURIComponent(reference)}`,
+    const response = await apiFetch(
+        `/bookings/${encodeURIComponent(reference)}`,
     );
 
     const data = await response.json();
@@ -374,8 +409,8 @@ export async function cancelPassenger(
     reference: string,
     passengerName: string,
 ): Promise<BookingDetails> {
-    const response = await fetch(
-        `${API_BASE_URL}/bookings/${encodeURIComponent(reference)}` +
+    const response = await apiFetch(
+        `/bookings/${encodeURIComponent(reference)}` +
             "/cancel-passenger",
         {
             method: "POST",
@@ -393,4 +428,89 @@ export async function cancelPassenger(
     }
 
     return data as BookingDetails;
+}
+
+
+export interface User {
+    id: number;
+    name: string;
+    email: string;
+}
+
+interface UserResponse {
+    user: User | null;
+}
+
+async function authRequest(path: string, body?: object): Promise<User | null> {
+    const response = await apiFetch(`/auth/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body ?? {}),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.message || data.error || "Request failed.");
+    }
+
+    return (data as UserResponse).user;
+}
+
+// Returns null when nobody is logged in.
+export async function getCurrentUser(): Promise<User | null> {
+    const response = await apiFetch("/auth/me");
+
+    if (!response.ok) {
+        throw new Error("Unable to check your login. Please try again.");
+    }
+
+    const data: UserResponse = await response.json();
+    return data.user;
+}
+
+export async function login(email: string, password: string) {
+    return (await authRequest("login", { email, password })) as User;
+}
+
+export async function register(params: {
+    name: string;
+    email: string;
+    password: string;
+}) {
+    return (await authRequest("register", params)) as User;
+}
+
+export async function logout() {
+    await authRequest("logout");
+}
+
+export interface BookingListItem {
+    booking_reference: string;
+    status: BookingStatus;
+    coach_class: CoachClass;
+    total_amount: string;
+    journey_date: string;
+    created_at: string;
+    train: {
+        train_number: string;
+        name: string;
+    };
+    source_code: string;
+    destination_code: string;
+    passenger_count: number;
+}
+
+export async function getMyBookings(): Promise<BookingListItem[]> {
+    const response = await apiFetch("/bookings");
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message || data.error || "Failed to load your bookings.",
+        );
+    }
+
+    return (data as { bookings: BookingListItem[] }).bookings;
 }

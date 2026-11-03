@@ -9,6 +9,15 @@ export const BERTH_LABELS: Record<string, string> = {
   SEAT: "Seat",
 };
 
+// Booking status -> status-pill colour class.
+export const STATUS_CLASS: Record<string, string> = {
+  CONFIRMED: "status-confirmed",
+  PENDING: "status-pending",
+  WAITLISTED: "status-pending",
+  CANCELLED: "status-closed",
+  EXPIRED: "status-closed",
+};
+
 export function formatJourneyDate(isoDate: string) {
   return new Date(`${isoDate}T00:00:00`).toLocaleDateString([], {
     weekday: "short",

@@ -1,6 +1,9 @@
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 from sqlalchemy.exc import SQLAlchemyError
+
+from app.auth import current_user_id
 
 from app.services.booking import (
     BookingError,
@@ -8,6 +11,7 @@ from app.services.booking import (
     cancel_passenger,
     create_booking,
     get_booking_by_reference,
+    list_user_bookings,
 )
 
 booking_bp = Blueprint(
@@ -17,7 +21,25 @@ booking_bp = Blueprint(
 )
 
 
+@booking_bp.get("")
+@jwt_required()
+def list_bookings_route():
+    try:
+        return jsonify({
+            "bookings": list_user_bookings(current_user_id()),
+        }), 200
+
+    except SQLAlchemyError:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "error": "DATABASE_ERROR",
+            "message": "Your bookings could not be loaded.",
+        }), 500
+
+
 @booking_bp.post("")
+@jwt_required()
 def create_booking_route():
     data = request.get_json(silent=True)
 
@@ -51,6 +73,7 @@ def create_booking_route():
 
     try:
         result = create_booking(
+            user_id=current_user_id(),
             train_schedule_id=data["train_schedule_id"],
             source_station_id=data["source_station_id"],
             destination_station_id=data["destination_station_id"],
@@ -86,9 +109,12 @@ def create_booking_route():
 
 
 @booking_bp.get("/<string:reference>")
+@jwt_required()
 def get_booking_route(reference):
     try:
-        return jsonify(get_booking_by_reference(reference)), 200
+        return jsonify(
+            get_booking_by_reference(reference, current_user_id())
+        ), 200
 
     except BookingError as exc:
         return jsonify({
@@ -106,9 +132,10 @@ def get_booking_route(reference):
 
 
 @booking_bp.post("/<string:reference>/cancel")
+@jwt_required()
 def cancel_booking_route(reference):
     try:
-        return jsonify(cancel_booking(reference)), 200
+        return jsonify(cancel_booking(reference, current_user_id())), 200
 
     except BookingError as exc:
         return jsonify({
@@ -134,6 +161,7 @@ def cancel_booking_route(reference):
 
 
 @booking_bp.post("/<string:reference>/cancel-passenger")
+@jwt_required()
 def cancel_passenger_route(reference):
     data = request.get_json(silent=True)
 
@@ -145,7 +173,9 @@ def cancel_passenger_route(reference):
 
     try:
         return jsonify(
-            cancel_passenger(reference, data.get("passenger_name"))
+            cancel_passenger(
+                reference, data.get("passenger_name"), current_user_id()
+            )
         ), 200
 
     except BookingError as exc:

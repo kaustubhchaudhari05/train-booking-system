@@ -568,6 +568,81 @@ a.link-button {
   font-size: 14px;
 }
 
+.header-nav .link-button {
+  font-size: 14px;
+}
+
+.password-field {
+  position: relative;
+}
+
+.form-field .password-field input {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #64708a;
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  background: #f1f5ff;
+  color: #285bd4;
+}
+
+.section-heading {
+  margin: 36px 0 16px;
+  font-size: 20px;
+}
+
+.booking-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.booking-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border: 1px solid #e4e8f0;
+  border-radius: 12px;
+  background: #ffffff;
+  color: inherit;
+  text-decoration: none;
+}
+
+.booking-list a:hover {
+  border-color: #285bd4;
+}
+
+.booking-list a > div {
+  display: grid;
+  gap: 4px;
+}
+
+.booking-list a > div span {
+  color: #68748a;
+  font-size: 13px;
+}
+
 @media (max-width: 700px) {
   .passenger-row {
     grid-template-columns: 1fr 1fr;

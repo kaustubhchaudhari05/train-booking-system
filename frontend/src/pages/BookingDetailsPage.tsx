@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getBooking, type BookingDetails } from "../api";
-import { formatJourneyDate, formatTime, passengerSeatLabel } from "../format";
-
-const STATUS_CLASS: Record<string, string> = {
-  CONFIRMED: "status-confirmed",
-  PENDING: "status-pending",
-  WAITLISTED: "status-pending",
-  CANCELLED: "status-closed",
-  EXPIRED: "status-closed",
-};
+import {
+  formatJourneyDate,
+  formatTime,
+  passengerSeatLabel,
+  STATUS_CLASS,
+} from "../format";
 
 function BookingDetailsPage() {
   const { reference = "" } = useParams();
@@ -47,7 +44,7 @@ function BookingDetailsPage() {
   return (
     <section className="booking-page">
       <Link className="link-button" to="/booking">
-        ← Find another booking
+        ← My bookings
       </Link>
 
       <h1>Booking details</h1>

@@ -45,7 +45,7 @@ def _as_utc(value):
     return value
 
 
-def create_payment_order(booking_id):
+def create_payment_order(booking_id, user_id):
     """Create a Razorpay order for a PENDING booking's total.
 
     Each call is a new payment attempt with its own order, so a failed
@@ -58,7 +58,8 @@ def create_payment_order(booking_id):
 
     booking = db.session.get(Booking, booking_id)
 
-    if booking is None:
+    # Another user's booking is reported as not found.
+    if booking is None or booking.user_id != user_id:
         raise PaymentError("Booking not found.", 404)
 
     now = datetime.now(timezone.utc)
@@ -141,7 +142,7 @@ def _check_provider_payment(payment, remote):
         )
 
 
-def verify_payment(order_id, payment_id, signature):
+def verify_payment(order_id, payment_id, signature, user_id):
     """Verify a Checkout result server-side and confirm the booking.
 
     The frontend only passes along Razorpay's ids and signature. The
@@ -167,7 +168,7 @@ def verify_payment(order_id, payment_id, signature):
 
     payment = _payment_by_order(order_id)
 
-    if payment is None:
+    if payment is None or payment.booking.user_id != user_id:
         raise PaymentError("Payment order not found.", 404)
 
     try:

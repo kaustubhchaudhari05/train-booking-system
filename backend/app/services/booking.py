@@ -92,6 +92,7 @@ def _assign_seats(passengers, seats):
 
 def create_booking(
     *,
+    user_id,
     train_schedule_id,
     source_station_id,
     destination_station_id,
@@ -198,6 +199,7 @@ def create_booking(
 
         booking = Booking(
             booking_reference=uuid4().hex[:20].upper(),
+            user_id=user_id,
             train_schedule_id=train_schedule_id,
             source_station_id=source_station_id,
             destination_station_id=destination_station_id,
@@ -566,9 +568,12 @@ def _normalize_reference(reference):
     return (reference or "").strip().upper()
 
 
-def get_booking_by_reference(reference):
+def get_booking_by_reference(reference, user_id):
+    # Other users' bookings are reported as not found, not forbidden,
+    # so references cannot be probed.
     booking = Booking.query.filter_by(
-        booking_reference=_normalize_reference(reference)
+        booking_reference=_normalize_reference(reference),
+        user_id=user_id,
     ).first()
 
     if booking is None:
@@ -577,12 +582,47 @@ def get_booking_by_reference(reference):
     return _serialize_booking(booking, datetime.now(timezone.utc))
 
 
-def cancel_booking(reference):
+def list_user_bookings(user_id):
+    """The user's bookings, newest first, in a compact list form."""
+    now = datetime.now(timezone.utc)
+    bookings = db.session.execute(
+        db.select(Booking)
+        .filter_by(user_id=user_id)
+        .order_by(Booking.created_at.desc(), Booking.id.desc())
+    ).scalars().all()
+
+    results = []
+    for booking in bookings:
+        schedule = booking.train_schedule
+        results.append({
+            "booking_reference": booking.booking_reference,
+            "status": _effective_status(booking, now),
+            "coach_class": booking.coach_class,
+            "total_amount": str(booking.total_amount),
+            "journey_date": schedule.journey_date.isoformat(),
+            "created_at": _as_utc(booking.created_at).isoformat(),
+            "train": {
+                "train_number": schedule.train.train_number,
+                "name": schedule.train.name,
+            },
+            "source_code": booking.source_station.code,
+            "destination_code": booking.destination_station.code,
+            "passenger_count": sum(
+                1 for p in booking.passengers
+                if p.status in LIVE_PASSENGER_STATUSES
+            ),
+        })
+
+    return results
+
+
+def cancel_booking(reference, user_id):
     try:
         # Lock so cancellation cannot race with confirmation, another
         # cancellation, or waitlist promotion.
         booking = lock_booking(
-            booking_reference=_normalize_reference(reference)
+            booking_reference=_normalize_reference(reference),
+            user_id=user_id,
         )
 
         if booking is None:
@@ -631,7 +671,7 @@ def _cancel_whole_booking(booking, reservations):
     booking.expires_at = None
 
 
-def cancel_passenger(reference, passenger_name):
+def cancel_passenger(reference, passenger_name, user_id):
     if not isinstance(passenger_name, str) or not passenger_name.strip():
         raise BookingError("Passenger name is required.")
 
@@ -643,7 +683,8 @@ def cancel_passenger(reference, passenger_name):
         # Same lock order as cancel_booking: schedule, booking, then
         # reservations.
         booking = lock_booking(
-            booking_reference=_normalize_reference(reference)
+            booking_reference=_normalize_reference(reference),
+            user_id=user_id,
         )
 
         if booking is None:
