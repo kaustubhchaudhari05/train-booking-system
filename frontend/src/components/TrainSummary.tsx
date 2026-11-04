@@ -1,4 +1,5 @@
 import { type TrainSearchResult } from "../api";
+import TrainIcon from "./TrainIcon";
 
 interface TrainSummaryProps {
   train: TrainSearchResult;
@@ -17,6 +18,7 @@ function TrainSummary({ train }: TrainSummaryProps) {
 
       <div className="journey-times">
         <div>
+          <TrainIcon className="journey-icon" />
           <strong>{train.source.departure_time ?? "N/A"}</strong>
           <p>{train.source.name}</p>
           <span>{train.source.code}</span>
@@ -27,6 +29,7 @@ function TrainSummary({ train }: TrainSummaryProps) {
         </div>
 
         <div className="destination-time">
+          <TrainIcon className="journey-icon journey-icon-flipped" />
           <strong>{train.destination.arrival_time ?? "N/A"}</strong>
           <p>{train.destination.name}</p>
           <span>{train.destination.code}</span>

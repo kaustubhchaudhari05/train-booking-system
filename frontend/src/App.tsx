@@ -52,8 +52,9 @@ function App() {
     <main className="page">
       <header className="site-header">
         <Link className="brand" to="/">
-          <span className="brand-icon">🚆</span>
-          <span>Railway</span>
+          <span>
+            RAIL<span className="brand-accent">WAY</span>
+          </span>
         </Link>
         <HeaderNav />
       </header>

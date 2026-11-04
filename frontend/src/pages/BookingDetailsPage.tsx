@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getBooking, type BookingDetails } from "../api";
+import TrainIcon from "../components/TrainIcon";
 import {
   formatJourneyDate,
   formatTime,
@@ -71,6 +72,7 @@ function BookingDetailsPage() {
 
           <div className="journey-times">
             <div>
+              <TrainIcon className="journey-icon" />
               <strong>{booking.source.departure_time ?? "N/A"}</strong>
               <p>{booking.source.name}</p>
               <span>{booking.source.code}</span>
@@ -81,6 +83,7 @@ function BookingDetailsPage() {
             </div>
 
             <div className="destination-time">
+              <TrainIcon className="journey-icon journey-icon-flipped" />
               <strong>{booking.destination.arrival_time ?? "N/A"}</strong>
               <p>{booking.destination.name}</p>
               <span>{booking.destination.code}</span>
